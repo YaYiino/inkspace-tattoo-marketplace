@@ -3,13 +3,19 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { Studio, Profile } from '@/lib/types'
+import { Studio, Profile, StudioFormData, StudioAvailability, AvailabilityFormData } from '@/lib/types'
 import { Navigation } from '@/app/components/Navigation'
+import Button from '@/app/components/Button'
+import StudioListingForm from '@/app/components/StudioListingForm'
+import AvailabilityCalendar from '@/app/components/AvailabilityCalendar'
 
 export default function StudioDashboard() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [studio, setStudio] = useState<Studio | null>(null)
+  const [availability, setAvailability] = useState<StudioAvailability[]>([])
   const [loading, setLoading] = useState(true)
+  const [currentView, setCurrentView] = useState<'dashboard' | 'edit-listing' | 'availability'>('dashboard')
+  const [isSaving, setIsSaving] = useState(false)
   const router = useRouter()
   const supabase = createClient()
 
@@ -47,6 +53,11 @@ export default function StudioDashboard() {
 
       setProfile(profileData)
       setStudio(studioData)
+      
+      // Load availability data
+      if (studioData) {
+        loadAvailability(studioData.id)
+      }
     } catch (error) {
       console.error('Error loading profile:', error)
     } finally {
@@ -54,10 +65,182 @@ export default function StudioDashboard() {
     }
   }
 
+  const loadAvailability = async (studioId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('studio_availability')
+        .select('*')
+        .eq('studio_id', studioId)
+        .gte('date', new Date().toISOString().split('T')[0])
+        .order('date', { ascending: true })
+
+      if (error) {
+        console.error('Error loading availability:', error)
+      } else {
+        setAvailability(data || [])
+      }
+    } catch (error) {
+      console.error('Error loading availability:', error)
+    }
+  }
+
+  const handleSaveStudio = async (formData: Partial<StudioFormData>) => {
+    if (!studio) return
+    
+    setIsSaving(true)
+    try {
+      const updateData: any = {
+        name: formData.name,
+        description: formData.description,
+        address: formData.address,
+        city: formData.city,
+        state: formData.state,
+        country: formData.country,
+        zip_code: formData.zip_code,
+        hourly_rate: formData.hourly_rate,
+        daily_rate: formData.daily_rate,
+        amenities: formData.amenities,
+        equipment: formData.equipment,
+        policies: formData.policies,
+        requirements: formData.requirements,
+        instant_book: formData.instant_book,
+        min_booking_hours: formData.min_booking_hours,
+        max_booking_hours: formData.max_booking_hours,
+        cancellation_policy: formData.cancellation_policy,
+        updated_at: new Date().toISOString()
+      }
+
+      // Handle image uploads here if needed
+      // For now, we'll skip image upload implementation
+
+      const { error } = await supabase
+        .from('studios')
+        .update(updateData)
+        .eq('id', studio.id)
+
+      if (error) {
+        console.error('Error updating studio:', error)
+        throw error
+      }
+
+      // Reload studio data
+      await loadProfile()
+      setCurrentView('dashboard')
+    } catch (error) {
+      console.error('Error saving studio:', error)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleSaveAvailability = async (availabilityData: AvailabilityFormData) => {
+    if (!studio) return
+
+    try {
+      const { error } = await supabase
+        .from('studio_availability')
+        .insert({
+          studio_id: studio.id,
+          date: availabilityData.date,
+          start_time: availabilityData.start_time,
+          end_time: availabilityData.end_time,
+          price_override: availabilityData.price_override,
+          is_available: true
+        })
+
+      if (error) {
+        console.error('Error saving availability:', error)
+        throw error
+      }
+
+      // Reload availability
+      loadAvailability(studio.id)
+    } catch (error) {
+      console.error('Error saving availability:', error)
+      throw error
+    }
+  }
+
+  const handleDeleteAvailability = async (availabilityId: string) => {
+    try {
+      const { error } = await supabase
+        .from('studio_availability')
+        .delete()
+        .eq('id', availabilityId)
+
+      if (error) {
+        console.error('Error deleting availability:', error)
+        throw error
+      }
+
+      // Update local state
+      setAvailability(prev => prev.filter(av => av.id !== availabilityId))
+    } catch (error) {
+      console.error('Error deleting availability:', error)
+      throw error
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-green-600"></div>
+      </div>
+    )
+  }
+
+  if (currentView === 'edit-listing' && studio) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navigation />
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          <div className="mb-8">
+            <button
+              onClick={() => setCurrentView('dashboard')}
+              className="flex items-center text-purple-600 hover:text-purple-800 transition-colors"
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              Back to Dashboard
+            </button>
+            <h1 className="text-2xl font-bold text-gray-900 mt-2">Edit Studio Listing</h1>
+          </div>
+          <StudioListingForm
+            studio={studio}
+            onSave={handleSaveStudio}
+            onCancel={() => setCurrentView('dashboard')}
+            isLoading={isSaving}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  if (currentView === 'availability' && studio) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navigation />
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          <div className="mb-8">
+            <button
+              onClick={() => setCurrentView('dashboard')}
+              className="flex items-center text-purple-600 hover:text-purple-800 transition-colors"
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              Back to Dashboard
+            </button>
+            <h1 className="text-2xl font-bold text-gray-900 mt-2">Manage Availability</h1>
+          </div>
+          <AvailabilityCalendar
+            studioId={studio.id}
+            onSave={handleSaveAvailability}
+            onDelete={handleDeleteAvailability}
+            existingAvailability={availability}
+          />
+        </div>
       </div>
     )
   }
@@ -77,13 +260,29 @@ export default function StudioDashboard() {
                 Studio Dashboard - Manage your space and bookings
               </p>
             </div>
-            <div className="text-right">
+            <div className="flex items-center space-x-4">
               <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
                 studio?.is_active 
                   ? 'bg-green-100 text-green-800'
                   : 'bg-gray-100 text-gray-800'
               }`}>
                 {studio?.is_active ? '● Active Studio' : '● Inactive Studio'}
+              </div>
+              <div className="flex space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentView('edit-listing')}
+                >
+                  Edit Listing
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentView('availability')}
+                >
+                  Manage Availability
+                </Button>
               </div>
             </div>
           </div>
@@ -113,8 +312,10 @@ export default function StudioDashboard() {
                 </svg>
               </div>
               <div className="ml-4">
-                <p className="text-2xl font-bold text-gray-900">0</p>
-                <p className="text-gray-600">Active Bookings</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {availability.filter(av => av.is_available).length}
+                </p>
+                <p className="text-gray-600">Available Slots</p>
               </div>
             </div>
           </div>
@@ -123,12 +324,14 @@ export default function StudioDashboard() {
             <div className="flex items-center">
               <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
                 <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
               </div>
               <div className="ml-4">
-                <p className="text-2xl font-bold text-gray-900">0</p>
-                <p className="text-gray-600">Total Artists</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {studio?.instant_book ? 'ON' : 'OFF'}
+                </p>
+                <p className="text-gray-600">Instant Booking</p>
               </div>
             </div>
           </div>
@@ -150,57 +353,120 @@ export default function StudioDashboard() {
 
         {/* Studio Information */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Studio Information</h2>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-semibold text-gray-900">Studio Information</h2>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentView('edit-listing')}
+            >
+              Edit Details
+            </Button>
+          </div>
           <div className="grid md:grid-cols-2 gap-6">
             <div>
               <h3 className="font-medium text-gray-900 mb-2">Description</h3>
-              <p className="text-gray-600 text-sm">{studio?.description}</p>
+              <p className="text-gray-600 text-sm">{studio?.description || 'No description provided'}</p>
             </div>
             <div>
               <h3 className="font-medium text-gray-900 mb-2">Address</h3>
               <p className="text-gray-600 text-sm">
                 {studio?.address}<br />
                 {studio?.city}, {studio?.state} {studio?.zip_code}
+                {studio?.country && studio.country !== 'United States' && (
+                  <><br />{studio.country}</>
+                )}
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-gray-900 mb-2">Pricing</h3>
+              <p className="text-gray-600 text-sm">
+                ${studio?.hourly_rate}/hour • ${studio?.daily_rate}/day
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-gray-900 mb-2">Cancellation Policy</h3>
+              <p className="text-gray-600 text-sm">
+                {studio?.cancellation_policy || 'No policy set'}
               </p>
             </div>
           </div>
         </div>
 
-        {/* Amenities */}
-        {studio?.amenities && studio.amenities.length > 0 && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Studio Amenities</h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {studio.amenities.map((amenity, index) => (
-                <div 
-                  key={index}
-                  className="flex items-center p-3 bg-green-50 rounded-lg"
-                >
-                  <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                  <span className="text-sm text-gray-700">{amenity}</span>
-                </div>
-              ))}
+        {/* Amenities & Equipment */}
+        <div className="grid md:grid-cols-2 gap-6 mb-8">
+          {/* Amenities */}
+          {studio?.amenities && studio.amenities.length > 0 && (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Studio Amenities</h2>
+              <div className="grid grid-cols-1 gap-2">
+                {studio.amenities.map((amenity, index) => (
+                  <div 
+                    key={index}
+                    className="flex items-center p-2 bg-green-50 rounded-lg"
+                  >
+                    <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                    <span className="text-sm text-gray-700">{amenity}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+
+          {/* Equipment */}
+          {studio?.equipment && studio.equipment.length > 0 && (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Available Equipment</h2>
+              <div className="grid grid-cols-1 gap-2">
+                {studio.equipment.map((equipment, index) => (
+                  <div 
+                    key={index}
+                    className="flex items-center p-2 bg-blue-50 rounded-lg"
+                  >
+                    <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
+                    <span className="text-sm text-gray-700">{equipment}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Studio Images */}
-        {studio?.images && studio.images.length > 0 && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Studio Photos</h2>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Studio Photos</h2>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentView('edit-listing')}
+            >
+              Manage Photos
+            </Button>
+          </div>
+          {studio?.images && studio.images.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {studio.images.map((image, index) => (
                 <div key={index} className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
                   <img 
                     src={image} 
                     alt={`Studio ${index + 1}`}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover hover:scale-105 transition-transform cursor-pointer"
                   />
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="text-center py-8">
+              <svg className="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No Photos Yet</h3>
+              <p className="text-gray-600 mb-4">Add photos to showcase your studio and attract more artists</p>
+              <Button onClick={() => setCurrentView('edit-listing')}>Add Photos</Button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

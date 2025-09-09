@@ -6,6 +6,7 @@ import Button from "./components/Button"
 import Section from "./components/Section"
 import Card from "./components/Card"
 import AuthModal from "./components/AuthModal"
+import QuickSearch from "./components/QuickSearch"
 import { Database, Profile, UserRole } from "../lib/types"
 
 export default function Home() {
@@ -155,6 +156,11 @@ export default function Home() {
             </div>
           </div>
         </div>
+      </Section>
+
+      {/* Quick Search */}
+      <Section padding="xl">
+        <QuickSearch />
       </Section>
 
       {/* Value Propositions */}

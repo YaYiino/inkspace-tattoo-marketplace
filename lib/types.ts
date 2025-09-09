@@ -1,10 +1,12 @@
-export type UserType = 'artist' | 'studio'
+export type UserRole = 'artist' | 'studio'
+export type UserType = 'artist' | 'studio' // Keep for backward compatibility
 
 export interface Profile {
   id: string
   email: string
   full_name?: string
-  user_type?: UserType
+  role?: UserRole
+  user_type?: UserType // Keep for backward compatibility
   created_at: string
   updated_at: string
 }
@@ -31,11 +33,22 @@ export interface Studio {
   address?: string
   city?: string
   state?: string
+  country?: string
   zip_code?: string
+  latitude?: number
+  longitude?: number
   hourly_rate?: number
+  daily_rate?: number
   amenities?: string[]
+  equipment?: string[]
   images?: string[]
+  policies?: string
+  requirements?: string
   is_active: boolean
+  instant_book?: boolean
+  min_booking_hours?: number
+  max_booking_hours?: number
+  cancellation_policy?: string
   created_at: string
   updated_at: string
 }
@@ -87,6 +100,28 @@ export interface Database {
           updated_at?: string
         }
       }
+      studio_availability: {
+        Row: StudioAvailability
+        Insert: Omit<StudioAvailability, 'id' | 'created_at' | 'updated_at'> & {
+          id?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Omit<StudioAvailability, 'id' | 'studio_id' | 'created_at' | 'updated_at'>> & {
+          updated_at?: string
+        }
+      }
+      bookings: {
+        Row: Booking
+        Insert: Omit<Booking, 'id' | 'created_at' | 'updated_at'> & {
+          id?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Omit<Booking, 'id' | 'studio_id' | 'artist_id' | 'created_at' | 'updated_at'>> & {
+          updated_at?: string
+        }
+      }
     }
   }
 }
@@ -106,10 +141,26 @@ export interface StudioFormData {
   address: string
   city: string
   state: string
+  country: string
   zip_code: string
   hourly_rate: number
+  daily_rate: number
   amenities: string[]
+  equipment: string[]
   images: File[]
+  policies: string
+  requirements: string
+  instant_book: boolean
+  min_booking_hours: number
+  max_booking_hours: number
+  cancellation_policy: string
+}
+
+export interface AvailabilityFormData {
+  date: string
+  start_time: string
+  end_time: string
+  price_override?: number
 }
 
 export const ARTIST_SPECIALTIES = [
@@ -130,6 +181,49 @@ export const ARTIST_SPECIALTIES = [
   'Neo-Traditional'
 ] as const
 
+// New types for marketplace functionality
+export interface StudioAvailability {
+  id: string
+  studio_id: string
+  date: string
+  start_time: string
+  end_time: string
+  is_available: boolean
+  price_override?: number
+  created_at: string
+  updated_at: string
+}
+
+export interface Booking {
+  id: string
+  studio_id: string
+  artist_id: string
+  start_datetime: string
+  end_datetime: string
+  total_hours: number
+  total_amount: number
+  status: 'pending' | 'confirmed' | 'cancelled' | 'completed'
+  message?: string
+  created_at: string
+  updated_at: string
+  studio?: Studio
+  artist?: Artist
+}
+
+export interface StudioSearch {
+  query?: string
+  city?: string
+  state?: string
+  country?: string
+  min_price?: number
+  max_price?: number
+  amenities?: string[]
+  equipment?: string[]
+  available_from?: string
+  available_to?: string
+  instant_book?: boolean
+}
+
 export const STUDIO_AMENITIES = [
   'WiFi',
   'Air Conditioning',
@@ -142,5 +236,36 @@ export const STUDIO_AMENITIES = [
   'Consultation Room',
   'Autoclave Sterilization',
   'Single-use Needles',
-  'Disposable Tubes'
+  'Disposable Tubes',
+  'Waiting Area',
+  '24/7 Access',
+  'Security System',
+  'Natural Light',
+  'Food & Drinks Nearby',
+  'Public Transport Access'
+] as const
+
+export const STUDIO_EQUIPMENT = [
+  'Tattoo Machines',
+  'Power Supply',
+  'Needles & Cartridges',
+  'Ink Selection',
+  'Disposable Tubes',
+  'Barrier Film',
+  'Green Soap',
+  'Paper Towels',
+  'Gloves',
+  'Masks',
+  'Tattoo Chairs',
+  'Adjustable Lighting',
+  'Magnifying Glass',
+  'Stencil Paper',
+  'Transfer Solution',
+  'Aftercare Products'
+] as const
+
+export const CANCELLATION_POLICIES = [
+  'Flexible: Full refund 24 hours prior',
+  'Moderate: 50% refund 48 hours prior',
+  'Strict: No refund less than 7 days prior'
 ] as const
