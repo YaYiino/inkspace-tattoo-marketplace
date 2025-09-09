@@ -8,20 +8,35 @@ import { Navigation } from '@/app/components/Navigation'
 import Button from '@/app/components/Button'
 import StudioListingForm from '@/app/components/StudioListingForm'
 import AvailabilityCalendar from '@/app/components/AvailabilityCalendar'
+import BookingsList from '@/app/components/BookingsList'
+import BookingsCalendar from '@/app/components/BookingsCalendar'
 
 export default function StudioDashboard() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [studio, setStudio] = useState<Studio | null>(null)
   const [availability, setAvailability] = useState<StudioAvailability[]>([])
   const [loading, setLoading] = useState(true)
-  const [currentView, setCurrentView] = useState<'dashboard' | 'edit-listing' | 'availability'>('dashboard')
+  const [currentView, setCurrentView] = useState<'dashboard' | 'bookings' | 'calendar' | 'edit-listing' | 'availability'>('dashboard')
   const [isSaving, setIsSaving] = useState(false)
+  const [bookingStats, setBookingStats] = useState({
+    total: 0,
+    pending: 0,
+    confirmed: 0,
+    completed: 0,
+    totalRevenue: 0
+  })
   const router = useRouter()
   const supabase = createClient()
 
   useEffect(() => {
     loadProfile()
   }, [])
+
+  useEffect(() => {
+    if (studio) {
+      loadBookingStats()
+    }
+  }, [studio])
 
   const loadProfile = async () => {
     try {
@@ -81,6 +96,34 @@ export default function StudioDashboard() {
       }
     } catch (error) {
       console.error('Error loading availability:', error)
+    }
+  }
+
+  const loadBookingStats = async () => {
+    if (!studio) return
+
+    try {
+      const { data: bookings, error } = await supabase
+        .from('bookings')
+        .select('status, total_amount')
+        .eq('studio_id', studio.id)
+
+      if (error) {
+        console.error('Error loading booking stats:', error)
+        return
+      }
+
+      const stats = {
+        total: bookings?.length || 0,
+        pending: bookings?.filter(b => b.status === 'pending').length || 0,
+        confirmed: bookings?.filter(b => b.status === 'confirmed').length || 0,
+        completed: bookings?.filter(b => b.status === 'completed').length || 0,
+        totalRevenue: bookings?.filter(b => b.status === 'completed').reduce((sum, b) => sum + Number(b.total_amount), 0) || 0
+      }
+
+      setBookingStats(stats)
+    } catch (error) {
+      console.error('Error loading booking stats:', error)
     }
   }
 
@@ -288,18 +331,39 @@ export default function StudioDashboard() {
           </div>
         </div>
 
+        {/* Navigation Tabs */}
+        <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg mb-8">
+          {[
+            { key: 'dashboard', label: 'Overview' },
+            { key: 'bookings', label: 'Bookings' },
+            { key: 'calendar', label: 'Calendar' }
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setCurrentView(tab.key as any)}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                currentView === tab.key
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
         {/* Stats Cards */}
         <div className="grid md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="flex items-center">
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+              <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
+                <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
               <div className="ml-4">
-                <p className="text-2xl font-bold text-gray-900">${studio?.hourly_rate || 0}</p>
-                <p className="text-gray-600">Hourly Rate</p>
+                <p className="text-2xl font-bold text-gray-900">{bookingStats.pending}</p>
+                <p className="text-gray-600">Pending Requests</p>
               </div>
             </div>
           </div>
@@ -312,10 +376,22 @@ export default function StudioDashboard() {
                 </svg>
               </div>
               <div className="ml-4">
-                <p className="text-2xl font-bold text-gray-900">
-                  {availability.filter(av => av.is_available).length}
-                </p>
-                <p className="text-gray-600">Available Slots</p>
+                <p className="text-2xl font-bold text-gray-900">{bookingStats.confirmed}</p>
+                <p className="text-gray-600">Confirmed Bookings</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center">
+              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <p className="text-2xl font-bold text-gray-900">${bookingStats.totalRevenue.toFixed(2)}</p>
+                <p className="text-gray-600">Total Revenue</p>
               </div>
             </div>
           </div>
@@ -324,35 +400,42 @@ export default function StudioDashboard() {
             <div className="flex items-center">
               <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
                 <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
               <div className="ml-4">
-                <p className="text-2xl font-bold text-gray-900">
-                  {studio?.instant_book ? 'ON' : 'OFF'}
-                </p>
-                <p className="text-gray-600">Instant Booking</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center">
-              <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-                <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                </svg>
-              </div>
-              <div className="ml-4">
-                <p className="text-2xl font-bold text-gray-900">$0</p>
-                <p className="text-gray-600">Monthly Revenue</p>
+                <p className="text-2xl font-bold text-gray-900">{bookingStats.completed}</p>
+                <p className="text-gray-600">Completed Sessions</p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Studio Information */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
+        {/* Content Based on Current View */}
+        {currentView === 'dashboard' && (
+          <>
+            {/* Recent Bookings */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">Recent Booking Requests</h2>
+                <button
+                  onClick={() => setCurrentView('bookings')}
+                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                >
+                  View All
+                </button>
+              </div>
+              {profile && (
+                <BookingsList 
+                  userType="studio" 
+                  userId={profile.id} 
+                  onBookingUpdate={loadBookingStats}
+                />
+              )}
+            </div>
+
+            {/* Studio Information */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-semibold text-gray-900">Studio Information</h2>
             <Button
@@ -432,41 +515,58 @@ export default function StudioDashboard() {
           )}
         </div>
 
-        {/* Studio Images */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Studio Photos</h2>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentView('edit-listing')}
-            >
-              Manage Photos
-            </Button>
-          </div>
-          {studio?.images && studio.images.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {studio.images.map((image, index) => (
-                <div key={index} className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
-                  <img 
-                    src={image} 
-                    alt={`Studio ${index + 1}`}
-                    className="w-full h-full object-cover hover:scale-105 transition-transform cursor-pointer"
-                  />
+            {/* Studio Images */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">Studio Photos</h2>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentView('edit-listing')}
+                >
+                  Manage Photos
+                </Button>
+              </div>
+              {studio?.images && studio.images.length > 0 ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {studio.images.slice(0, 8).map((image, index) => (
+                    <div key={index} className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                      <img 
+                        src={image} 
+                        alt={`Studio ${index + 1}`}
+                        className="w-full h-full object-cover hover:scale-105 transition-transform cursor-pointer"
+                      />
+                    </div>
+                  ))}
                 </div>
-              ))}
+              ) : (
+                <div className="text-center py-8">
+                  <svg className="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Photos Yet</h3>
+                  <p className="text-gray-600 mb-4">Add photos to showcase your studio and attract more artists</p>
+                  <Button onClick={() => setCurrentView('edit-listing')}>Add Photos</Button>
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="text-center py-8">
-              <svg className="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Photos Yet</h3>
-              <p className="text-gray-600 mb-4">Add photos to showcase your studio and attract more artists</p>
-              <Button onClick={() => setCurrentView('edit-listing')}>Add Photos</Button>
-            </div>
-          )}
-        </div>
+          </>
+        )}
+
+        {currentView === 'bookings' && profile && (
+          <BookingsList 
+            userType="studio" 
+            userId={profile.id} 
+            onBookingUpdate={loadBookingStats}
+          />
+        )}
+
+        {currentView === 'calendar' && profile && (
+          <BookingsCalendar 
+            userType="studio" 
+            userId={profile.id}
+          />
+        )}
       </div>
     </div>
   )

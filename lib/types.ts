@@ -122,6 +122,39 @@ export interface Database {
           updated_at?: string
         }
       }
+      messages: {
+        Row: Message
+        Insert: Omit<Message, 'id' | 'created_at' | 'updated_at'> & {
+          id?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Omit<Message, 'id' | 'booking_id' | 'sender_id' | 'created_at' | 'updated_at'>> & {
+          updated_at?: string
+        }
+      }
+      notifications: {
+        Row: Notification
+        Insert: Omit<Notification, 'id' | 'created_at' | 'updated_at'> & {
+          id?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Omit<Notification, 'id' | 'user_id' | 'created_at' | 'updated_at'>> & {
+          updated_at?: string
+        }
+      }
+      booking_reviews: {
+        Row: BookingReview
+        Insert: Omit<BookingReview, 'id' | 'created_at' | 'updated_at'> & {
+          id?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Omit<BookingReview, 'id' | 'booking_id' | 'reviewer_id' | 'created_at' | 'updated_at'>> & {
+          updated_at?: string
+        }
+      }
     }
   }
 }
@@ -163,6 +196,19 @@ export interface AvailabilityFormData {
   price_override?: number
 }
 
+export interface BookingFormData {
+  studio_id: string
+  start_datetime: string
+  end_datetime: string
+  booking_notes?: string
+  artist_requirements?: string
+}
+
+export interface MessageFormData {
+  booking_id: string
+  message_text: string
+}
+
 export const ARTIST_SPECIALTIES = [
   'Traditional',
   'Realism',
@@ -201,13 +247,57 @@ export interface Booking {
   start_datetime: string
   end_datetime: string
   total_hours: number
+  hourly_rate: number
   total_amount: number
   status: 'pending' | 'confirmed' | 'cancelled' | 'completed'
-  message?: string
+  booking_notes?: string
+  artist_requirements?: string
+  cancellation_reason?: string
+  cancelled_by?: string
+  cancelled_at?: string
+  confirmed_at?: string
+  completed_at?: string
   created_at: string
   updated_at: string
   studio?: Studio
   artist?: Artist
+}
+
+export interface Message {
+  id: string
+  booking_id: string
+  sender_id: string
+  recipient_id: string
+  message_text: string
+  is_read: boolean
+  created_at: string
+  updated_at: string
+  sender?: Profile
+  recipient?: Profile
+}
+
+export interface Notification {
+  id: string
+  user_id: string
+  type: 'booking_request' | 'booking_confirmed' | 'booking_cancelled' | 'message_received' | 'booking_reminder'
+  title: string
+  message: string
+  booking_id?: string
+  is_read: boolean
+  created_at: string
+  updated_at: string
+  booking?: Booking
+}
+
+export interface BookingReview {
+  id: string
+  booking_id: string
+  reviewer_id: string
+  rating: number
+  review_text?: string
+  created_at: string
+  updated_at: string
+  reviewer?: Profile
 }
 
 export interface StudioSearch {
