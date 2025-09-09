@@ -1,0 +1,413 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  NODE_VERSION: '18'
+  DOCKER_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+  IMAGE_NAME: tattoo-marketplace
+
+jobs:
+  # Code Quality and Testing
+  code-quality:
+    name: Code Quality & Testing
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: tattoo_marketplace_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run type checking
+        run: npx tsc --noEmit
+
+      - name: Setup test database
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tattoo_marketplace_test
+        run: |
+          npx prisma migrate deploy
+          npx prisma db seed
+
+      - name: Run tests
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tattoo_marketplace_test
+          NEXTAUTH_SECRET: test-secret
+          NEXTAUTH_URL: http://localhost:3000
+        run: |
+          npm run test:ci
+          npm run test:e2e:headless
+
+      - name: Upload test coverage
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/lcov.info
+          fail_ci_if_error: true
+
+  # Security Scanning
+  security-scan:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    needs: [code-quality]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          languages: typescript, javascript
+
+      - name: Run Semgrep
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/secrets
+            p/owasp-top-ten
+            p/javascript
+            p/typescript
+
+  # Build and Push Docker Image
+  build-and-push:
+    name: Build & Push Container
+    runs-on: ubuntu-latest
+    needs: [code-quality, security-scan]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || github.event_name == 'workflow_dispatch'
+    
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build.outputs.digest }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+      - name: Run container security scan
+        run: |
+          chmod +x ./scripts/container-security-scan.sh
+          ./scripts/container-security-scan.sh ${{ env.IMAGE_NAME }} $(echo "${{ steps.meta.outputs.tags }}" | cut -d':' -f2 | head -n1)
+
+      - name: Sign container image
+        uses: sigstore/cosign-installer@v3
+      - run: |
+          cosign sign --yes ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+
+  # Infrastructure Deployment
+  deploy-infrastructure:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    needs: [build-and-push]
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    
+    strategy:
+      matrix:
+        environment: 
+          - ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+          - ${{ github.event.inputs.environment || 'staging' }}
+    
+    environment: ${{ matrix.environment }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ~1.5
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        working-directory: ./infrastructure/terraform
+        run: terraform init
+
+      - name: Terraform Plan
+        working-directory: ./infrastructure/terraform
+        env:
+          TF_VAR_environment: ${{ matrix.environment }}
+          TF_VAR_app_image: ${{ needs.build-and-push.outputs.image-tag }}
+          TF_VAR_domain_name: ${{ vars.DOMAIN_NAME }}
+        run: |
+          terraform plan -var-file="environments/${{ matrix.environment }}.tfvars" -out=tfplan
+
+      - name: Terraform Apply
+        working-directory: ./infrastructure/terraform
+        env:
+          TF_VAR_environment: ${{ matrix.environment }}
+          TF_VAR_app_image: ${{ needs.build-and-push.outputs.image-tag }}
+          TF_VAR_domain_name: ${{ vars.DOMAIN_NAME }}
+        run: terraform apply tfplan
+
+  # Application Deployment
+  deploy-application:
+    name: Deploy Application
+    runs-on: ubuntu-latest
+    needs: [build-and-push, deploy-infrastructure]
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    
+    strategy:
+      matrix:
+        environment: 
+          - ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+          - ${{ github.event.inputs.environment || 'staging' }}
+    
+    environment: ${{ matrix.environment }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Update ECS service
+        run: |
+          # Get the cluster and service names from Terraform output
+          CLUSTER_NAME=$(aws ecs list-clusters --query "clusterArns[?contains(@, 'tattoo-marketplace-${{ matrix.environment }}')]" --output text | cut -d'/' -f2)
+          SERVICE_NAME=$(aws ecs list-services --cluster $CLUSTER_NAME --query "serviceArns[?contains(@, 'tattoo-marketplace-${{ matrix.environment }}')]" --output text | cut -d'/' -f3)
+          
+          # Update the service with new image
+          aws ecs update-service \
+            --cluster $CLUSTER_NAME \
+            --service $SERVICE_NAME \
+            --force-new-deployment
+
+      - name: Wait for deployment to complete
+        run: |
+          CLUSTER_NAME=$(aws ecs list-clusters --query "clusterArns[?contains(@, 'tattoo-marketplace-${{ matrix.environment }}')]" --output text | cut -d'/' -f2)
+          SERVICE_NAME=$(aws ecs list-services --cluster $CLUSTER_NAME --query "serviceArns[?contains(@, 'tattoo-marketplace-${{ matrix.environment }}')]" --output text | cut -d'/' -f3)
+          
+          aws ecs wait services-stable \
+            --cluster $CLUSTER_NAME \
+            --services $SERVICE_NAME
+
+      - name: Run database migrations
+        run: |
+          # Get database connection details
+          DB_HOST=$(aws rds describe-db-instances --query "DBInstances[?contains(DBInstanceIdentifier, 'tattoo-marketplace-${{ matrix.environment }}')].Endpoint.Address" --output text)
+          
+          # Run migrations using ECS task
+          aws ecs run-task \
+            --cluster tattoo-marketplace-${{ matrix.environment }} \
+            --task-definition tattoo-marketplace-${{ matrix.environment }}-migration \
+            --network-configuration "awsvpcConfiguration={subnets=[subnet-xxx],securityGroups=[sg-xxx],assignPublicIp=ENABLED}" \
+            --overrides "{\"containerOverrides\":[{\"name\":\"migration\",\"command\":[\"npx\",\"prisma\",\"migrate\",\"deploy\"]}]}"
+
+  # Post-deployment Testing
+  post-deployment-tests:
+    name: Post-deployment Tests
+    runs-on: ubuntu-latest
+    needs: [deploy-application]
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    
+    strategy:
+      matrix:
+        environment: 
+          - ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+          - ${{ github.event.inputs.environment || 'staging' }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run smoke tests
+        env:
+          TEST_URL: ${{ vars.APP_URL }}
+        run: |
+          npm run test:smoke
+
+      - name: Run load tests
+        if: matrix.environment == 'staging'
+        env:
+          TEST_URL: ${{ vars.APP_URL }}
+        run: |
+          npm run test:load
+
+      - name: Health check
+        run: |
+          curl -f ${{ vars.APP_URL }}/api/health || exit 1
+
+  # Rollback on Failure
+  rollback:
+    name: Rollback on Failure
+    runs-on: ubuntu-latest
+    needs: [deploy-application, post-deployment-tests]
+    if: failure() && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
+    
+    strategy:
+      matrix:
+        environment: 
+          - ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+    
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Rollback ECS service
+        run: |
+          CLUSTER_NAME=$(aws ecs list-clusters --query "clusterArns[?contains(@, 'tattoo-marketplace-${{ matrix.environment }}')]" --output text | cut -d'/' -f2)
+          SERVICE_NAME=$(aws ecs list-services --cluster $CLUSTER_NAME --query "serviceArns[?contains(@, 'tattoo-marketplace-${{ matrix.environment }}')]" --output text | cut -d'/' -f3)
+          
+          # Get previous task definition
+          CURRENT_TASK_DEF=$(aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME --query "services[0].taskDefinition" --output text)
+          FAMILY=$(echo $CURRENT_TASK_DEF | cut -d':' -f1)
+          CURRENT_REVISION=$(echo $CURRENT_TASK_DEF | cut -d':' -f2)
+          PREVIOUS_REVISION=$((CURRENT_REVISION - 1))
+          
+          if [ $PREVIOUS_REVISION -gt 0 ]; then
+            aws ecs update-service \
+              --cluster $CLUSTER_NAME \
+              --service $SERVICE_NAME \
+              --task-definition $FAMILY:$PREVIOUS_REVISION
+          fi
+
+      - name: Notify rollback
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          text: "Deployment failed and rollback initiated for ${{ matrix.environment }}"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # Notification
+  notify:
+    name: Notify Deployment Status
+    runs-on: ubuntu-latest
+    needs: [deploy-application, post-deployment-tests]
+    if: always() && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
+    
+    steps:
+      - name: Notify success
+        if: needs.deploy-application.result == 'success' && needs.post-deployment-tests.result == 'success'
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          text: "Deployment successful! 🚀"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Notify failure
+        if: needs.deploy-application.result == 'failure' || needs.post-deployment-tests.result == 'failure'
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          text: "Deployment failed! ❌"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
