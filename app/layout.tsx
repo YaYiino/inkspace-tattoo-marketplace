@@ -5,8 +5,8 @@ import { Providers } from './providers'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata = {
-  title: 'Tattoo Marketplace',
-  description: 'Connect tattoo artists with studios worldwide',
+  title: 'Antsss - Tattoo Artist Marketplace',
+  description: 'Connect tattoo artists with studios worldwide - The Airbnb for tattoo studios',
 }
 
 export default function RootLayout({

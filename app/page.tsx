@@ -73,7 +73,7 @@ export default function Home() {
             <div className="flex items-center">
               <div className="flex items-center space-x-2">
                 <div className="w-8 h-8 bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg"></div>
-                <h1 className="text-2xl font-bold text-gray-900">InkSpace</h1>
+                <h1 className="text-2xl font-bold text-gray-900">Antsss</h1>
               </div>
             </div>
             <div className="flex items-center space-x-6">
@@ -161,7 +161,7 @@ export default function Home() {
       <Section id="for-artists" padding="xl">
         <div className="text-center mb-16">
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-            Why Artists Love InkSpace
+            Why Artists Love Antsss
           </h2>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
             Break free from the constraints of a single location and expand your artistic horizons
@@ -261,7 +261,7 @@ export default function Home() {
       <Section id="how-it-works" padding="xl">
         <div className="text-center mb-16">
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-            How InkSpace Works
+            How Antsss Works
           </h2>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
             Getting started is simple. Whether you're an artist or studio owner, you can be up and running in minutes.
@@ -359,7 +359,7 @@ export default function Home() {
                 ))}
               </div>
               <p className="text-gray-600 mb-4">
-                "InkSpace changed my career. I've worked in 12 different cities this year and built an incredible network."
+                "Antsss changed my career. I've worked in 12 different cities this year and built an incredible network."
               </p>
               <div className="font-semibold text-gray-900">Sarah Chen</div>
               <div className="text-sm text-gray-500">Traveling Artist</div>
@@ -389,7 +389,7 @@ export default function Home() {
                 ))}
               </div>
               <p className="text-gray-600 mb-4">
-                "Professional, secure, and reliable. InkSpace connects us with amazing artists every month."
+                "Professional, secure, and reliable. Antsss connects us with amazing artists every month."
               </p>
               <div className="font-semibold text-gray-900">Alex Thompson</div>
               <div className="text-sm text-gray-500">Studio Manager, London</div>
@@ -406,7 +406,7 @@ export default function Home() {
               Ready to Transform Your Tattoo Career?
             </h2>
             <p className="text-xl text-gray-300">
-              Join thousands of artists and studio owners already using InkSpace
+              Join thousands of artists and studio owners already using Antsss
             </p>
           </div>
 
@@ -461,7 +461,7 @@ export default function Home() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">Welcome to InkSpace!</h3>
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">Welcome to Antsss!</h3>
               <p className="text-gray-600 mb-6">
                 You're signed in as a {userProfile.role === 'artist' ? 'Tattoo Artist' : 'Studio Owner'}. 
                 The platform is currently in development.
@@ -479,7 +479,7 @@ export default function Home() {
             <Card className="max-w-2xl mx-auto text-center">
               <h3 className="text-2xl font-bold text-gray-900 mb-2">Complete Your Profile</h3>
               <p className="text-gray-600 mb-6">
-                Please complete your profile to get started with InkSpace.
+                Please complete your profile to get started with Antsss.
               </p>
               <Button onClick={() => setIsAuthModalOpen(true)} size="lg">
                 Complete Profile
@@ -496,7 +496,7 @@ export default function Home() {
             <div>
               <div className="flex items-center space-x-2 mb-4">
                 <div className="w-8 h-8 bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg"></div>
-                <h3 className="text-xl font-bold">InkSpace</h3>
+                <h3 className="text-xl font-bold">Antsss</h3>
               </div>
               <p className="text-gray-400">
                 Connecting tattoo artists with studios worldwide.
@@ -533,7 +533,7 @@ export default function Home() {
           
           <div className="border-t border-gray-800 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center">
             <p className="text-gray-400 text-sm">
-              © 2024 InkSpace. All rights reserved.
+              © 2024 Antsss. All rights reserved.
             </p>
             <div className="flex space-x-6 mt-4 md:mt-0">
               <a href="#" className="text-gray-400 hover:text-white transition-colors text-sm">
