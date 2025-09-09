@@ -1,18 +1,23 @@
-# Production Environment Configuration
+# Production Environment Variables
 environment = "production"
+project_name = "antsss-tattoo-marketplace"
 
-# Networking
-vpc_cidr = "10.2.0.0/16"
+# Infrastructure settings
+backup_retention_days = 90
+log_retention_days = 30
+enable_monitoring = true
+enable_backups = true
 
-# Database
-db_instance_class        = "db.r6g.large"
-db_allocated_storage     = 100
-db_max_allocated_storage = 1000
+# Domain configuration
+domain_name = "antsss.com"
 
-# Application
-desired_count = 3
-cpu          = 1024
-memory       = 2048
+# Notification settings
+notification_email = "alerts@antsss.com"
 
-# Domain
-domain_name = "tattoo-marketplace.com"
+# Additional tags
+tags = {
+  Environment = "production"
+  Owner       = "platform-team"
+  CostCenter  = "product"
+  Criticality = "high"
+}

@@ -1,49 +1,72 @@
-# Main Terraform configuration for Tattoo Marketplace
+# Infrastructure as Code for Antsss Tattoo Marketplace
 terraform {
-  required_version = ">= 1.5"
+  required_version = ">= 1.0"
+  
   required_providers {
+    vercel = {
+      source  = "vercel/vercel"
+      version = "~> 0.15"
+    }
+    supabase = {
+      source  = "supabase/supabase"
+      version = "~> 1.0"
+    }
     aws = {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.1"
-    }
   }
 
   backend "s3" {
-    bucket         = "tattoo-marketplace-terraform-state"
-    key            = "terraform.tfstate"
-    region         = "us-west-2"
-    encrypt        = true
-    dynamodb_table = "terraform-state-lock"
+    bucket = "antsss-terraform-state"
+    key    = "tattoo-marketplace/terraform.tfstate"
+    region = "us-east-1"
   }
+}
+
+# Variables
+variable "environment" {
+  description = "Environment name (dev, staging, production)"
+  type        = string
+}
+
+variable "project_name" {
+  description = "Project name"
+  type        = string
+  default     = "antsss-tattoo-marketplace"
+}
+
+variable "vercel_team_id" {
+  description = "Vercel team ID"
+  type        = string
+  sensitive   = true
+}
+
+variable "supabase_access_token" {
+  description = "Supabase access token"
+  type        = string
+  sensitive   = true
+}
+
+# Providers
+provider "vercel" {
+  api_token = var.vercel_api_token
+  team      = var.vercel_team_id
 }
 
 provider "aws" {
-  region = var.aws_region
-
-  default_tags {
-    tags = {
-      Project     = "tattoo-marketplace"
-      Environment = var.environment
-      ManagedBy   = "terraform"
-      Owner       = "platform-team"
-    }
-  }
+  region = "us-east-1"
 }
 
 # Data sources
-data "aws_availability_zones" "available" {
-  state = "available"
+data "vercel_project_directory" "antsss" {
+  path = "."
 }
 
-data "aws_caller_identity" "current" {}
-
-# Local values
+# Locals
 locals {
-  name_prefix = "${var.project_name}-${var.environment}"
+  domain_name = var.environment == "production" ? "antsss.com" : "${var.environment}.antsss.com"
+  
   common_tags = {
     Project     = var.project_name
     Environment = var.environment
@@ -51,92 +74,163 @@ locals {
   }
 }
 
-# VPC Module
-module "vpc" {
-  source = "./modules/vpc"
-
-  project_name        = var.project_name
-  environment         = var.environment
-  vpc_cidr           = var.vpc_cidr
-  availability_zones = slice(data.aws_availability_zones.available.names, 0, 3)
-
-  tags = local.common_tags
+# Vercel Project
+resource "vercel_project" "antsss" {
+  name      = "${var.project_name}-${var.environment}"
+  framework = "nextjs"
+  
+  root_directory = "."
+  
+  build_command = "npm run build"
+  output_directory = ".next"
+  install_command = "npm ci"
+  
+  environment = [
+    {
+      key    = "NODE_ENV"
+      value  = var.environment == "production" ? "production" : var.environment
+      target = ["production", "preview"]
+    },
+    {
+      key    = "NEXT_PUBLIC_APP_URL"
+      value  = "https://${local.domain_name}"
+      target = ["production", "preview"]
+    }
+  ]
+  
+  git_repository = {
+    type = "github"
+    repo = "yannickhirt/tattoo-marketplace"
+  }
 }
 
-# Security Module
-module "security" {
-  source = "./modules/security"
-
-  project_name = var.project_name
-  environment  = var.environment
-  vpc_id       = module.vpc.vpc_id
-
-  tags = local.common_tags
+# Vercel Domain
+resource "vercel_project_domain" "antsss" {
+  project_id = vercel_project.antsss.id
+  domain     = local.domain_name
 }
 
-# Database Module
-module "database" {
-  source = "./modules/database"
-
-  project_name           = var.project_name
-  environment           = var.environment
-  vpc_id                = module.vpc.vpc_id
-  private_subnet_ids    = module.vpc.private_subnet_ids
-  security_group_ids    = [module.security.database_security_group_id]
-  
-  db_instance_class     = var.db_instance_class
-  db_allocated_storage  = var.db_allocated_storage
-  db_max_allocated_storage = var.db_max_allocated_storage
-
-  tags = local.common_tags
-}
-
-# ECS Module
-module "ecs" {
-  source = "./modules/ecs"
-
-  project_name              = var.project_name
-  environment              = var.environment
-  vpc_id                   = module.vpc.vpc_id
-  public_subnet_ids        = module.vpc.public_subnet_ids
-  private_subnet_ids       = module.vpc.private_subnet_ids
-  alb_security_group_id    = module.security.alb_security_group_id
-  ecs_security_group_id    = module.security.ecs_security_group_id
-  
-  # Application configuration
-  app_image                = var.app_image
-  app_port                 = var.app_port
-  desired_count           = var.desired_count
-  cpu                     = var.cpu
-  memory                  = var.memory
-  
-  # Database connection
-  database_url            = module.database.database_url
+# AWS CloudWatch Log Groups
+resource "aws_cloudwatch_log_group" "app_logs" {
+  name              = "/aws/lambda/${var.project_name}-${var.environment}"
+  retention_in_days = var.environment == "production" ? 30 : 7
   
   tags = local.common_tags
 }
 
-# CDN and Storage Module
-module "cdn" {
-  source = "./modules/cdn"
+# AWS S3 Bucket for backups
+resource "aws_s3_bucket" "backups" {
+  bucket = "${var.project_name}-${var.environment}-backups"
+  
+  tags = local.common_tags
+}
 
-  project_name = var.project_name
-  environment  = var.environment
-  domain_name  = var.domain_name
+resource "aws_s3_bucket_versioning" "backups" {
+  bucket = aws_s3_bucket.backups.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_encryption" "backups" {
+  bucket = aws_s3_bucket.backups.id
+
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm = "AES256"
+      }
+    }
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "backups" {
+  bucket = aws_s3_bucket.backups.id
+
+  rule {
+    id     = "backup_retention"
+    status = "Enabled"
+
+    expiration {
+      days = var.environment == "production" ? 90 : 30
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+  }
+}
+
+# AWS CloudWatch Dashboard
+resource "aws_cloudwatch_dashboard" "main" {
+  dashboard_name = "${var.project_name}-${var.environment}"
+
+  dashboard_body = jsonencode({
+    widgets = [
+      {
+        type   = "metric"
+        x      = 0
+        y      = 0
+        width  = 12
+        height = 6
+
+        properties = {
+          metrics = [
+            ["AWS/Lambda", "Duration", "FunctionName", "${var.project_name}-${var.environment}"],
+            [".", "Errors", ".", "."],
+            [".", "Invocations", ".", "."]
+          ]
+          view    = "timeSeries"
+          stacked = false
+          region  = "us-east-1"
+          title   = "Lambda Metrics"
+          period  = 300
+        }
+      }
+    ]
+  })
+}
+
+# AWS SNS Topic for alerts
+resource "aws_sns_topic" "alerts" {
+  name = "${var.project_name}-${var.environment}-alerts"
+  
+  tags = local.common_tags
+}
+
+# AWS CloudWatch Alarms
+resource "aws_cloudwatch_metric_alarm" "high_error_rate" {
+  alarm_name          = "${var.project_name}-${var.environment}-high-error-rate"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "Errors"
+  namespace           = "AWS/Lambda"
+  period              = "300"
+  statistic           = "Sum"
+  threshold           = "10"
+  alarm_description   = "This metric monitors lambda errors"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+
+  dimensions = {
+    FunctionName = "${var.project_name}-${var.environment}"
+  }
 
   tags = local.common_tags
 }
 
-# Monitoring Module
-module "monitoring" {
-  source = "./modules/monitoring"
+# Outputs
+output "vercel_project_id" {
+  value = vercel_project.antsss.id
+}
 
-  project_name = var.project_name
-  environment  = var.environment
-  
-  ecs_cluster_name = module.ecs.cluster_name
-  ecs_service_name = module.ecs.service_name
-  alb_target_group_arn = module.ecs.alb_target_group_arn
+output "domain_url" {
+  value = "https://${local.domain_name}"
+}
 
-  tags = local.common_tags
+output "backup_bucket" {
+  value = aws_s3_bucket.backups.bucket
+}
+
+output "cloudwatch_dashboard_url" {
+  value = "https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=${aws_cloudwatch_dashboard.main.dashboard_name}"
 }

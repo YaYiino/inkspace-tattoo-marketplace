@@ -1,85 +1,88 @@
-# Global Variables
-variable "project_name" {
-  description = "Name of the project"
+# Terraform Variables for Antsss Tattoo Marketplace
+
+variable "vercel_api_token" {
+  description = "Vercel API token"
   type        = string
-  default     = "tattoo-marketplace"
+  sensitive   = true
 }
 
 variable "environment" {
-  description = "Environment name (dev, staging, prod)"
+  description = "Environment name (dev, staging, production)"
   type        = string
   validation {
-    condition     = contains(["dev", "staging", "prod"], var.environment)
-    error_message = "Environment must be dev, staging, or prod."
+    condition = contains(["dev", "staging", "production"], var.environment)
+    error_message = "Environment must be one of: dev, staging, production."
   }
+}
+
+variable "project_name" {
+  description = "Project name"
+  type        = string
+  default     = "antsss-tattoo-marketplace"
+}
+
+variable "vercel_team_id" {
+  description = "Vercel team ID"
+  type        = string
+  sensitive   = true
 }
 
 variable "aws_region" {
   description = "AWS region"
   type        = string
-  default     = "us-west-2"
+  default     = "us-east-1"
 }
 
-# Networking
-variable "vpc_cidr" {
-  description = "CIDR block for VPC"
-  type        = string
-  default     = "10.0.0.0/16"
-}
-
-# Database
-variable "db_instance_class" {
-  description = "RDS instance class"
-  type        = string
-  default     = "db.t3.micro"
-}
-
-variable "db_allocated_storage" {
-  description = "Initial allocated storage for RDS"
-  type        = number
-  default     = 20
-}
-
-variable "db_max_allocated_storage" {
-  description = "Maximum allocated storage for RDS"
-  type        = number
-  default     = 100
-}
-
-# Application
-variable "app_image" {
-  description = "Docker image for the application"
-  type        = string
-  default     = "tattoo-marketplace:latest"
-}
-
-variable "app_port" {
-  description = "Port the application listens on"
-  type        = number
-  default     = 3000
-}
-
-variable "desired_count" {
-  description = "Desired number of ECS tasks"
-  type        = number
-  default     = 2
-}
-
-variable "cpu" {
-  description = "CPU units for ECS task"
-  type        = number
-  default     = 512
-}
-
-variable "memory" {
-  description = "Memory for ECS task"
-  type        = number
-  default     = 1024
-}
-
-# Domain
 variable "domain_name" {
   description = "Domain name for the application"
   type        = string
   default     = ""
+}
+
+variable "supabase_project_ref" {
+  description = "Supabase project reference"
+  type        = string
+  sensitive   = true
+}
+
+variable "supabase_access_token" {
+  description = "Supabase access token"
+  type        = string
+  sensitive   = true
+}
+
+variable "notification_email" {
+  description = "Email for notifications and alerts"
+  type        = string
+  default     = "alerts@antsss.com"
+}
+
+variable "backup_retention_days" {
+  description = "Number of days to retain backups"
+  type        = number
+  default     = 30
+}
+
+variable "log_retention_days" {
+  description = "Number of days to retain logs"
+  type        = number
+  default     = 14
+}
+
+variable "enable_monitoring" {
+  description = "Enable monitoring and alerting"
+  type        = bool
+  default     = true
+}
+
+variable "enable_backups" {
+  description = "Enable automated backups"
+  type        = bool
+  default     = true
+}
+
+variable "tags" {
+  description = "Additional tags to apply to resources"
+  type        = map(string)
+  default     = {}
 }

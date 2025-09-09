@@ -1,18 +1,22 @@
-# Staging Environment Configuration
+# Staging Environment Variables
 environment = "staging"
+project_name = "antsss-tattoo-marketplace"
 
-# Networking
-vpc_cidr = "10.1.0.0/16"
+# Infrastructure settings
+backup_retention_days = 14
+log_retention_days = 7
+enable_monitoring = true
+enable_backups = true
 
-# Database
-db_instance_class        = "db.t3.small"
-db_allocated_storage     = 50
-db_max_allocated_storage = 200
+# Domain configuration
+domain_name = "staging.antsss.com"
 
-# Application
-desired_count = 2
-cpu          = 512
-memory       = 1024
+# Notification settings
+notification_email = "staging-alerts@antsss.com"
 
-# Domain
-domain_name = "staging.tattoo-marketplace.com"
+# Additional tags
+tags = {
+  Environment = "staging"
+  Owner       = "qa-team"
+  CostCenter  = "engineering"
+}

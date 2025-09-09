@@ -1,18 +1,22 @@
-# Development Environment Configuration
+# Development Environment Variables
 environment = "dev"
+project_name = "antsss-tattoo-marketplace"
 
-# Networking
-vpc_cidr = "10.0.0.0/16"
+# Infrastructure settings
+backup_retention_days = 7
+log_retention_days = 3
+enable_monitoring = false
+enable_backups = false
 
-# Database
-db_instance_class        = "db.t3.micro"
-db_allocated_storage     = 20
-db_max_allocated_storage = 100
+# Domain configuration
+domain_name = "dev.antsss.com"
 
-# Application
-desired_count = 1
-cpu          = 256
-memory       = 512
+# Notification settings
+notification_email = "dev-alerts@antsss.com"
 
-# Domain
-domain_name = "dev.tattoo-marketplace.com"
+# Additional tags
+tags = {
+  Environment = "development"
+  Owner       = "development-team"
+  CostCenter  = "engineering"
+}
