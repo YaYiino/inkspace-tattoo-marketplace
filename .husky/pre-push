@@ -1,0 +1,91 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+echo "🚀 Running pre-push checks..."
+
+# Get current branch
+current_branch=$(git branch --show-current)
+
+# Skip checks for certain branches
+if [ "$current_branch" = "main" ] || [ "$current_branch" = "develop" ]; then
+  echo "⚠️  Pushing to protected branch: $current_branch"
+  echo "   Make sure this is intended and approved!"
+  
+  # Could add additional checks here for main/develop
+  # For now, just warn but allow
+fi
+
+# Run full test suite before pushing
+echo "🧪 Running full test suite..."
+npm run test || {
+  echo "❌ Tests failed! Cannot push."
+  echo "💡 Fix failing tests before pushing"
+  exit 1
+}
+
+# Run type check
+echo "🔍 Running type check..."
+npm run type-check || {
+  echo "❌ Type check failed! Cannot push."
+  exit 1
+}
+
+# Run linter on all files
+echo "🔍 Running full lint check..."
+npm run lint || {
+  echo "❌ Lint check failed! Cannot push."
+  echo "💡 Run 'npm run lint:fix' to auto-fix issues"
+  exit 1
+}
+
+# Build check
+echo "🏗️  Running build check..."
+npm run build || {
+  echo "❌ Build failed! Cannot push."
+  echo "💡 Fix build errors before pushing"
+  exit 1
+}
+
+# Security audit
+echo "🛡️  Running security audit..."
+npm audit --audit-level moderate || {
+  echo "⚠️  Security vulnerabilities found!"
+  echo "💡 Run 'npm audit fix' to resolve issues"
+  echo "   Or 'npm audit' to see details"
+  # Don't block push, but warn
+}
+
+# Check for large files
+echo "📦 Checking for large files..."
+large_files=$(git ls-files | xargs ls -l | awk '$5 > 5242880 {print $9, $5}')
+if [ -n "$large_files" ]; then
+  echo "⚠️  Large files detected (>5MB):"
+  echo "$large_files"
+  echo "💡 Consider using Git LFS for large assets"
+  # Don't block push, but warn
+fi
+
+# Check if pushing to main/develop without PR
+if [ "$current_branch" = "main" ] && [ -z "$GITHUB_ACTIONS" ]; then
+  echo "❌ Direct push to main branch is not allowed!"
+  echo "💡 Create a pull request instead"
+  exit 1
+fi
+
+if [ "$current_branch" = "develop" ] && [ -z "$GITHUB_ACTIONS" ]; then
+  echo "⚠️  Pushing directly to develop branch"
+  echo "💡 Consider using a feature branch and PR"
+  # Allow but warn
+fi
+
+# Check branch naming convention for feature branches
+if echo "$current_branch" | grep -q "^feature/"; then
+  if ! echo "$current_branch" | grep -qE "^feature/[a-z0-9-]+$"; then
+    echo "⚠️  Branch name doesn't follow convention"
+    echo "   Current: $current_branch"
+    echo "   Expected: feature/kebab-case-name"
+  fi
+fi
+
+echo "✅ Pre-push checks passed!"
+echo "🚀 Ready to push to $current_branch!"

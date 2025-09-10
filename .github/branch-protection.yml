@@ -1,0 +1,197 @@
+# GitHub Branch Protection Configuration
+# This file defines the branch protection rules that should be applied
+# Use GitHub CLI or repository settings to apply these configurations
+
+name: Branch Protection Rules
+
+branches:
+  main:
+    protection:
+      # Require status checks before merging
+      required_status_checks:
+        strict: true # Require branches to be up-to-date before merging
+        contexts:
+          - "CI Pipeline / Lint & Type Check"
+          - "CI Pipeline / Unit Tests"
+          - "CI Pipeline / Build Test (production)"
+          - "CI Pipeline / E2E Tests"
+          - "CI Pipeline / Security Scan"
+          - "Deployment / Health Check"
+      
+      # Pull request requirements
+      required_pull_request_reviews:
+        dismiss_stale_reviews: true
+        require_code_owner_reviews: true
+        required_approving_review_count: 2
+        restrict_review_dismissals: true
+        # Only allow repository admins and owners to dismiss reviews
+      
+      # Push restrictions
+      enforce_admins: false # Allow admins to bypass restrictions in emergencies
+      restrictions:
+        users: []  # No individual user restrictions
+        teams: ["core-developers", "maintainers"]  # Only these teams can push
+        apps: ["dependabot"]  # Allow automated dependency updates
+      
+      # Additional protections
+      required_linear_history: true  # Require linear commit history
+      allow_force_pushes: false      # Prevent force pushes
+      allow_deletions: false         # Prevent branch deletion
+      block_creations: false         # Allow branch creation
+      required_conversation_resolution: true  # Require all conversations to be resolved
+
+  develop:
+    protection:
+      # Require status checks before merging
+      required_status_checks:
+        strict: true
+        contexts:
+          - "CI Pipeline / Lint & Type Check"
+          - "CI Pipeline / Unit Tests"
+          - "CI Pipeline / Build Test (staging)"
+          - "CI Pipeline / E2E Tests"
+          - "CI Pipeline / Security Scan"
+      
+      # Pull request requirements
+      required_pull_request_reviews:
+        dismiss_stale_reviews: true
+        require_code_owner_reviews: false
+        required_approving_review_count: 1
+        restrict_review_dismissals: false
+      
+      # Push restrictions
+      enforce_admins: false
+      restrictions:
+        users: []
+        teams: ["core-developers", "maintainers", "developers"]
+        apps: ["dependabot"]
+      
+      # Additional protections
+      required_linear_history: false  # More flexible for development
+      allow_force_pushes: false
+      allow_deletions: false
+      block_creations: false
+      required_conversation_resolution: true
+
+  staging:
+    protection:
+      # Require status checks before merging
+      required_status_checks:
+        strict: true
+        contexts:
+          - "CI Pipeline / Lint & Type Check"
+          - "CI Pipeline / Unit Tests"
+          - "CI Pipeline / Build Test (staging)"
+          - "Deployment / Staging Health Check"
+      
+      # Pull request requirements
+      required_pull_request_reviews:
+        dismiss_stale_reviews: true
+        require_code_owner_reviews: false
+        required_approving_review_count: 1
+        restrict_review_dismissals: false
+      
+      # Push restrictions
+      enforce_admins: false
+      restrictions:
+        users: []
+        teams: ["core-developers", "maintainers"]
+        apps: []
+      
+      # Additional protections
+      required_linear_history: true
+      allow_force_pushes: false
+      allow_deletions: false
+      block_creations: false
+      required_conversation_resolution: false
+
+# Pattern-based branch protection for feature branches
+branch_patterns:
+  "feature/**":
+    protection:
+      required_status_checks:
+        strict: false
+        contexts:
+          - "CI Pipeline / Lint & Type Check"
+          - "CI Pipeline / Unit Tests"
+          - "CI Pipeline / Build Test (development)"
+      
+      required_pull_request_reviews:
+        dismiss_stale_reviews: false
+        require_code_owner_reviews: false
+        required_approving_review_count: 0  # Allow self-merge for feature branches
+        restrict_review_dismissals: false
+      
+      enforce_admins: false
+      allow_force_pushes: true   # Allow force pushes during development
+      allow_deletions: true      # Allow cleanup of feature branches
+      required_conversation_resolution: false
+
+  "hotfix/**":
+    protection:
+      required_status_checks:
+        strict: true
+        contexts:
+          - "CI Pipeline / Lint & Type Check"
+          - "CI Pipeline / Unit Tests"
+          - "CI Pipeline / Build Test (production)"
+          - "CI Pipeline / Security Scan"
+      
+      required_pull_request_reviews:
+        dismiss_stale_reviews: true
+        require_code_owner_reviews: true
+        required_approving_review_count: 1  # Fast-track for critical fixes
+        restrict_review_dismissals: true
+      
+      enforce_admins: false
+      allow_force_pushes: false
+      allow_deletions: true
+      required_conversation_resolution: true
+
+  "release/**":
+    protection:
+      required_status_checks:
+        strict: true
+        contexts:
+          - "CI Pipeline / Lint & Type Check"
+          - "CI Pipeline / Unit Tests"
+          - "CI Pipeline / Build Test (production)"
+          - "CI Pipeline / E2E Tests"
+          - "CI Pipeline / Security Scan"
+          - "Deployment / Staging Health Check"
+      
+      required_pull_request_reviews:
+        dismiss_stale_reviews: true
+        require_code_owner_reviews: true
+        required_approving_review_count: 2
+        restrict_review_dismissals: true
+      
+      enforce_admins: false
+      allow_force_pushes: false
+      allow_deletions: false
+      required_conversation_resolution: true
+
+# Auto-merge settings
+auto_merge:
+  enabled_branches:
+    - "develop"
+    - "feature/**"
+  
+  requirements:
+    - all_checks_passed: true
+    - reviews_approved: true
+    - conversations_resolved: true
+    - branch_up_to_date: true
+  
+  merge_method: "squash"  # Default merge method
+  
+  exceptions:
+    "main":
+      merge_method: "merge"     # Preserve commit history in main
+      auto_merge: false         # Manual merge required
+    "release/**":
+      merge_method: "merge"
+      auto_merge: false
+    "hotfix/**":
+      merge_method: "squash"
+      auto_merge: false

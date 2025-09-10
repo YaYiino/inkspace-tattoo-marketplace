@@ -1,0 +1,90 @@
+# CODEOWNERS file for Antsss Tattoo Marketplace
+# This file defines who must review changes to specific parts of the codebase
+# More specific rules override less specific ones
+
+# Global fallback - require review from core team
+* @antsss/core-developers
+
+# Critical application files
+/app/ @antsss/frontend-team @antsss/core-developers
+/pages/ @antsss/frontend-team @antsss/core-developers
+
+# API and server-side logic
+/app/api/ @antsss/backend-team @antsss/core-developers
+/pages/api/ @antsss/backend-team @antsss/core-developers
+/lib/ @antsss/backend-team @antsss/core-developers
+/utils/ @antsss/backend-team @antsss/frontend-team
+
+# Database and migrations
+/supabase/ @antsss/database-team @antsss/backend-team
+*.sql @antsss/database-team @antsss/backend-team
+/lib/database.types.ts @antsss/database-team @antsss/backend-team
+
+# Authentication and security
+/middleware.ts @antsss/security-team @antsss/backend-team
+/lib/auth/ @antsss/security-team @antsss/backend-team
+/app/api/auth/ @antsss/security-team @antsss/backend-team
+
+# Configuration and infrastructure
+/.github/ @antsss/devops-team @antsss/core-developers
+/docker* @antsss/devops-team @antsss/core-developers
+/Dockerfile* @antsss/devops-team @antsss/core-developers
+/next.config* @antsss/devops-team @antsss/frontend-team
+/vercel.json @antsss/devops-team @antsss/core-developers
+
+# CI/CD and deployment
+/.github/workflows/ @antsss/devops-team @antsss/core-developers
+/scripts/ @antsss/devops-team @antsss/backend-team
+
+# Dependencies and package management
+/package.json @antsss/core-developers @antsss/devops-team
+/package-lock.json @antsss/core-developers @antsss/devops-team
+/yarn.lock @antsss/core-developers @antsss/devops-team
+
+# Code quality and linting
+/.eslintrc* @antsss/core-developers
+/tsconfig.json @antsss/core-developers
+/jest.config* @antsss/core-developers
+/playwright.config* @antsss/core-developers
+/lint-staged.config.js @antsss/core-developers
+
+# Environment and secrets
+/.env* @antsss/devops-team @antsss/security-team @antsss/core-developers
+/env.* @antsss/devops-team @antsss/security-team
+
+# Styling and design
+/tailwind.config.js @antsss/frontend-team @antsss/design-team
+/styles/ @antsss/frontend-team @antsss/design-team
+**/*.css @antsss/frontend-team @antsss/design-team
+
+# Components and UI
+/app/components/ @antsss/frontend-team @antsss/design-team
+/components/ @antsss/frontend-team @antsss/design-team
+
+# Testing
+**/*.test.* @antsss/qa-team @antsss/core-developers
+**/*.spec.* @antsss/qa-team @antsss/core-developers
+/tests/ @antsss/qa-team @antsss/core-developers
+/e2e/ @antsss/qa-team @antsss/core-developers
+
+# Documentation
+/*.md @antsss/tech-writers @antsss/core-developers
+/docs/ @antsss/tech-writers @antsss/core-developers
+
+# Monitoring and observability
+/sentry* @antsss/devops-team @antsss/backend-team
+/lib/monitoring/ @antsss/devops-team @antsss/backend-team
+
+# Performance and analytics
+/lib/analytics/ @antsss/analytics-team @antsss/backend-team
+/lib/performance/ @antsss/frontend-team @antsss/backend-team
+
+# Business logic and domain-specific code
+/app/dashboard/ @antsss/product-team @antsss/frontend-team
+/app/booking/ @antsss/product-team @antsss/backend-team
+/app/profile/ @antsss/product-team @antsss/frontend-team
+
+# Critical configuration files that affect production
+/healthcheck.js @antsss/devops-team @antsss/backend-team @antsss/core-developers
+/deployment-strategy.md @antsss/devops-team @antsss/core-developers
+*DEPLOYMENT*.md @antsss/devops-team @antsss/core-developers

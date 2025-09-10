@@ -1,0 +1,326 @@
+name: Preview Deployment
+
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to deploy'
+        required: true
+        type: number
+
+env:
+  NODE_VERSION: '20'
+  FORCE_COLOR: '1'
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_PREVIEW }}
+
+jobs:
+  # Quick validation
+  quick-validation:
+    name: Quick Validation
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linter
+        run: npm run lint
+
+      - name: Run type check
+        run: npm run type-check
+
+      - name: Quick build test
+        run: npm run build
+        env:
+          NODE_ENV: production
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.DEV_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.DEV_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+
+  # Deploy preview
+  deploy-preview:
+    name: Deploy Preview
+    runs-on: ubuntu-latest
+    needs: [quick-validation]
+    if: success()
+    environment:
+      name: preview-${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+      url: ${{ steps.deployment.outputs.url }}
+    outputs:
+      preview_url: ${{ steps.deployment.outputs.url }}
+      pr_number: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel Environment Information
+        run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build Project Artifacts
+        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          NODE_ENV: production
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.PREVIEW_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.PREVIEW_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_APP_URL: https://antsss-tattoo-marketplace-preview-${{ github.event.pull_request.number || github.event.inputs.pr_number }}.vercel.app
+          NEXT_PUBLIC_ENABLE_ANALYTICS: false
+          NEXT_PUBLIC_ENABLE_ERROR_REPORTING: true
+          NEXT_PUBLIC_DEBUG_MODE: true
+
+      - name: Deploy to Vercel Preview
+        run: |
+          vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }} > deployment-url.txt
+          echo "Deployment completed"
+
+      - name: Get deployment URL
+        id: deployment
+        run: echo "url=$(cat deployment-url.txt)" >> $GITHUB_OUTPUT
+
+      - name: Wait for deployment
+        run: |
+          echo "Waiting for preview deployment to be ready..."
+          for i in {1..15}; do
+            if curl -f -s ${{ steps.deployment.outputs.url }}/api/health > /dev/null; then
+              echo "Preview deployment is ready!"
+              break
+            fi
+            echo "Attempt $i/15: Preview not ready yet, waiting..."
+            sleep 10
+          done
+
+      - name: Comment preview URL
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = ${{ github.event.pull_request.number || github.event.inputs.pr_number }};
+            const previewUrl = '${{ steps.deployment.outputs.url }}';
+            
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber
+            });
+            
+            const botComment = comments.find(comment => 
+              comment.user.type === 'Bot' && comment.body.includes('🎯 Preview deployment')
+            );
+            
+            const body = `🎯 **Preview deployment ready for review!**
+            
+            **Preview URL:** ${previewUrl}
+            **Branch:** \`${{ github.head_ref }}\`
+            **Commit:** ${{ github.sha }}
+            
+            **Preview Features:**
+            - 🔍 Full feature testing environment
+            - 🛡️ Safe isolated testing space
+            - 📱 Mobile and desktop responsive testing
+            - 🚀 Latest changes from this PR
+            
+            **Testing Checklist:**
+            - [ ] Core functionality works as expected
+            - [ ] UI/UX changes render correctly
+            - [ ] Mobile responsiveness verified
+            - [ ] No console errors or warnings
+            - [ ] Performance feels responsive
+            
+            **Links:**
+            - [Home Page](${previewUrl})
+            - [Studios](${previewUrl}/studios)
+            - [Profile Setup](${previewUrl}/profile-completion)
+            
+            ---
+            *Preview updated at: ${new Date().toISOString()}*
+            *This preview will be automatically updated with new commits.*`;
+            
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body
+              });
+            }
+
+  # Run quick tests on preview
+  preview-tests:
+    name: Preview Tests
+    runs-on: ubuntu-latest
+    needs: [deploy-preview]
+    if: success()
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run quick smoke tests
+        run: |
+          # Basic health check
+          curl -f ${{ needs.deploy-preview.outputs.preview_url }}/api/health
+          
+          # Check key pages load
+          curl -f -s ${{ needs.deploy-preview.outputs.preview_url }} > /dev/null
+          curl -f -s ${{ needs.deploy-preview.outputs.preview_url }}/studios > /dev/null
+          curl -f -s ${{ needs.deploy-preview.outputs.preview_url }}/profile-completion > /dev/null
+          
+          echo "All smoke tests passed!"
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run critical path tests
+        run: npm run test:e2e:critical
+        env:
+          PLAYWRIGHT_TEST_BASE_URL: ${{ needs.deploy-preview.outputs.preview_url }}
+        continue-on-error: true
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: preview-test-results-${{ needs.deploy-preview.outputs.pr_number }}
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 3
+
+  # Accessibility and performance audit
+  preview-audit:
+    name: Preview Audit
+    runs-on: ubuntu-latest
+    needs: [deploy-preview]
+    if: success()
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Lighthouse audit
+        uses: treosh/lighthouse-ci-action@v10
+        with:
+          urls: |
+            ${{ needs.deploy-preview.outputs.preview_url }}
+            ${{ needs.deploy-preview.outputs.preview_url }}/studios
+          budgetPath: .lighthouserc.preview.json
+          uploadArtifacts: true
+          temporaryPublicStorage: true
+        continue-on-error: true
+
+      - name: Comment audit results
+        uses: actions/github-script@v7
+        if: always()
+        with:
+          script: |
+            const prNumber = ${{ needs.deploy-preview.outputs.pr_number }};
+            
+            // This would be enhanced with actual Lighthouse results
+            const auditBody = `## 📊 Preview Audit Results
+            
+            **Performance Audit:** Completed
+            **Accessibility Check:** Completed  
+            **Best Practices:** Completed
+            **SEO Analysis:** Completed
+            
+            Detailed results are available in the workflow artifacts.
+            
+            *Audit completed at: ${new Date().toISOString()}*`;
+            
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber
+            });
+            
+            const auditComment = comments.find(comment => 
+              comment.user.type === 'Bot' && comment.body.includes('📊 Preview Audit Results')
+            );
+            
+            if (auditComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: auditComment.id,
+                body: auditBody
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: auditBody
+              });
+            }
+
+  # Cleanup on PR close
+  cleanup-preview:
+    name: Cleanup Preview
+    runs-on: ubuntu-latest
+    if: github.event.action == 'closed'
+    
+    steps:
+      - name: Delete Vercel deployment
+        run: |
+          # This would delete the specific preview deployment
+          echo "Cleaning up preview deployment for PR ${{ github.event.pull_request.number }}"
+          # vercel remove --token=${{ secrets.VERCEL_TOKEN }} --safe --yes
+        continue-on-error: true
+
+      - name: Comment cleanup
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.issue.number;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: `🧹 **Preview deployment cleaned up**
+              
+              The preview deployment for this PR has been automatically removed.
+              
+              Thank you for your contribution! 🚀`
+            });

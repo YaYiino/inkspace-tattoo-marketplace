@@ -1,0 +1,72 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+echo "🔍 Running pre-commit checks..."
+
+# Check if this is a merge commit
+if git rev-parse -q --verify MERGE_HEAD; then
+  echo "⏭️ Merge commit detected, skipping pre-commit hooks"
+  exit 0
+fi
+
+# Run lint-staged
+echo "📝 Running lint-staged..."
+npx lint-staged || {
+  echo "❌ lint-staged failed"
+  exit 1
+}
+
+# Run type check
+echo "🔍 Running type check..."
+npm run type-check || {
+  echo "❌ Type check failed"
+  exit 1
+}
+
+# Check for forbidden patterns
+echo "🚫 Checking for forbidden patterns..."
+
+# Ensure no console.logs in production code
+if git diff --cached --name-only | grep -E '\.(js|jsx|ts|tsx)$' | xargs grep -l 'console\.log' > /dev/null 2>&1; then
+  echo "❌ console.log statements found in staged files. Please remove them before committing."
+  echo "💡 Use proper logging or remove debug statements"
+  exit 1
+fi
+
+# Check for TODO/FIXME in staged files
+if git diff --cached --name-only | xargs grep -E '(TODO|FIXME|XXX)' > /dev/null 2>&1; then
+  echo "⚠️ TODO/FIXME comments found in staged files:"
+  git diff --cached --name-only | xargs grep -n -E '(TODO|FIXME|XXX)' || true
+  echo "💡 Consider creating GitHub issues for these items"
+  # This is a warning, not a failure
+fi
+
+# Check for debugging imports
+if git diff --cached --name-only | grep -E '\.(js|jsx|ts|tsx)$' | xargs grep -l 'import.*debug\|require.*debug' > /dev/null 2>&1; then
+  echo "❌ Debug imports found in staged files. Please remove before committing."
+  exit 1
+fi
+
+# Check for hardcoded secrets/keys
+if git diff --cached | grep -E '(password|secret|key|token).*=.*["\'][a-zA-Z0-9]{8,}["\']' > /dev/null 2>&1; then
+  echo "❌ Possible hardcoded secrets detected in staged files!"
+  echo "💡 Use environment variables instead"
+  exit 1
+fi
+
+# Run security audit (non-blocking)
+echo "🛡️ Running security audit..."
+npm audit --audit-level high --silent || {
+  echo "⚠️ Security audit found issues (check with 'npm audit')"
+  # Don't block commit, but warn
+}
+
+# Check bundle size impact (only on relevant files)
+if git diff --cached --name-only | grep -E '\.(js|jsx|ts|tsx)$' > /dev/null; then
+  echo "📦 Checking bundle size impact..."
+  # This would run bundle analysis in a real setup
+  echo "💡 Consider running 'npm run build:analyze' to check bundle impact"
+fi
+
+echo "✅ Pre-commit checks passed!"
+echo "🚀 Ready to commit!"

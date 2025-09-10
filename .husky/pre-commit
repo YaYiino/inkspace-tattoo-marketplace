@@ -1,16 +1,73 @@
 #!/usr/bin/env sh
 . "$(dirname -- "$0")/_/husky.sh"
 
-# Run lint-staged
-npx lint-staged
+echo "🚀 Running pre-commit hooks..."
 
-# Run type check
-npm run type-check
+# Check if we're in a rebase/merge
+if [ -f .git/MERGE_HEAD ] || [ -f .git/REBASE_HEAD ]; then
+  echo "⚠️  Skipping pre-commit hooks during rebase/merge"
+  exit 0
+fi
 
-# Ensure no console.logs in production code
-if git diff --cached --name-only | grep -E '\.(js|jsx|ts|tsx)$' | xargs grep -l 'console\.log' > /dev/null; then
-  echo "❌ console.log statements found in staged files. Please remove them before committing."
+# Check for large files early
+echo "🔍 Checking for large files..."
+large_files=$(find . -type f -size +10M -not -path "./node_modules/*" -not -path "./.next/*" -not -path "./dist/*" 2>/dev/null)
+if [ -n "$large_files" ]; then
+  echo "❌ Large files detected (>10MB):"
+  echo "$large_files"
+  echo "Please remove or add to .gitignore"
   exit 1
 fi
 
-echo "✅ Pre-commit checks passed!"
+# Run lint-staged for staged files
+echo "🧹 Running lint-staged..."
+npx lint-staged || {
+  echo "❌ Lint-staged failed. Please fix the issues above."
+  exit 1
+}
+
+# Run type check
+echo "🔧 Checking TypeScript compilation..."
+npm run type-check || {
+  echo "❌ TypeScript compilation failed. Please fix type errors."
+  exit 1
+}
+
+# Ensure no console.logs in production code
+echo "🔍 Checking for console.log statements..."
+if git diff --cached --name-only | grep -E '\.(js|jsx|ts|tsx)$' | xargs grep -l 'console\.log' > /dev/null 2>&1; then
+  echo "❌ console.log statements found in staged files. Please remove them before committing."
+  echo "Tip: Use proper logging utilities or remove debug statements."
+  exit 1
+fi
+
+# Check for TODO/FIXME comments in production code (warning only)
+echo "📝 Checking for TODO/FIXME comments..."
+todos=$(git diff --cached --name-only | grep -E "\.(js|ts|tsx)$" | xargs grep -l "TODO\|FIXME" 2>/dev/null || true)
+if [ -n "$todos" ]; then
+  echo "⚠️  TODO/FIXME comments found in:"
+  echo "$todos"
+  echo "Consider addressing these before committing to main/develop"
+fi
+
+# Run tests on staged files (quick tests only)
+echo "🧪 Running quick tests on changed files..."
+staged_files=$(git diff --cached --name-only --diff-filter=AM | grep -E "\.(js|ts|tsx)$" | head -10)
+if [ -n "$staged_files" ]; then
+  # Run Jest on specific files for quick feedback
+  npm run test -- --findRelatedTests $staged_files --passWithNoTests --silent || {
+    echo "❌ Tests failed for staged files. Please fix before committing."
+    exit 1
+  }
+fi
+
+# Check for dependency vulnerabilities if package files changed
+if git diff --cached --name-only | grep -q "package-lock.json\|package.json"; then
+  echo "🛡️  Checking for dependency vulnerabilities..."
+  npm audit --audit-level=high || {
+    echo "⚠️  High-severity vulnerabilities detected. Please review."
+    echo "Run 'npm audit fix' to attempt automatic fixes."
+  }
+fi
+
+echo "✅ Pre-commit hooks completed successfully!"

@@ -1,0 +1,103 @@
+# EditorConfig is awesome: https://EditorConfig.org
+
+# top-most EditorConfig file
+root = true
+
+# All files
+[*]
+indent_style = space
+indent_size = 2
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+max_line_length = 100
+
+# JavaScript/TypeScript files
+[*.{js,jsx,ts,tsx}]
+indent_size = 2
+max_line_length = 100
+
+# JSON files
+[*.{json,jsonc}]
+indent_size = 2
+max_line_length = 120
+
+# YAML files
+[*.{yml,yaml}]
+indent_size = 2
+max_line_length = 80
+
+# Markdown files
+[*.{md,mdx}]
+trim_trailing_whitespace = false
+max_line_length = 80
+
+# HTML files
+[*.{html,htm}]
+indent_size = 2
+max_line_length = 120
+
+# CSS files
+[*.{css,scss,sass,less}]
+indent_size = 2
+max_line_length = 120
+
+# SQL files
+[*.sql]
+indent_size = 2
+max_line_length = 120
+
+# Shell scripts
+[*.{sh,bash}]
+indent_size = 2
+max_line_length = 100
+
+# Python files (if any)
+[*.py]
+indent_size = 4
+max_line_length = 88
+
+# Go files (if any)
+[*.go]
+indent_style = tab
+indent_size = 4
+
+# Rust files (if any)
+[*.rs]
+indent_size = 4
+max_line_length = 100
+
+# Package.json and lock files
+[{package.json,package-lock.json,yarn.lock,pnpm-lock.yaml}]
+indent_size = 2
+
+# Configuration files
+[*.{config.js,config.ts}]
+indent_size = 2
+
+# Test files
+[*.{test,spec}.{js,ts,jsx,tsx}]
+max_line_length = 120
+
+# Docker files
+[{Dockerfile*,docker-compose*.yml}]
+indent_size = 2
+
+# GitHub Actions workflows
+[.github/workflows/*.yml]
+indent_size = 2
+
+# Environment files
+[.env*]
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+# Ignore these files
+[{node_modules/**,dist/**,.next/**,build/**,coverage/**}]
+charset = unset
+end_of_line = unset
+indent_size = unset
+indent_style = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset

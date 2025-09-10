@@ -1,0 +1,85 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+echo "📝 Validating commit message..."
+
+commit_msg_file=$1
+commit_msg=$(cat "$commit_msg_file")
+
+# Skip validation for merge commits
+if echo "$commit_msg" | grep -q "^Merge "; then
+  echo "⏭️ Merge commit detected, skipping commit message validation"
+  exit 0
+fi
+
+# Skip validation for revert commits
+if echo "$commit_msg" | grep -q "^Revert "; then
+  echo "⏭️ Revert commit detected, skipping commit message validation"
+  exit 0
+fi
+
+# Check conventional commit format
+conventional_pattern="^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?: .{1,50}"
+
+if ! echo "$commit_msg" | grep -qE "$conventional_pattern"; then
+  echo "❌ Invalid commit message format!"
+  echo ""
+  echo "Expected format: <type>[optional scope]: <description>"
+  echo ""
+  echo "Types:"
+  echo "  feat:     A new feature"
+  echo "  fix:      A bug fix"
+  echo "  docs:     Documentation only changes"
+  echo "  style:    Changes that do not affect the meaning of the code"
+  echo "  refactor: A code change that neither fixes a bug nor adds a feature"
+  echo "  perf:     A code change that improves performance"
+  echo "  test:     Adding missing tests or correcting existing tests"
+  echo "  build:    Changes that affect the build system or external dependencies"
+  echo "  ci:       Changes to CI configuration files and scripts"
+  echo "  chore:    Other changes that don't modify src or test files"
+  echo "  revert:   Reverts a previous commit"
+  echo ""
+  echo "Examples:"
+  echo "  feat: add user authentication"
+  echo "  fix: resolve booking calendar bug"
+  echo "  docs: update README installation steps"
+  echo "  feat(auth): implement OAuth login"
+  echo "  fix(booking): handle timezone edge cases"
+  echo ""
+  echo "Your commit message:"
+  echo "  $commit_msg"
+  exit 1
+fi
+
+# Check message length
+first_line=$(echo "$commit_msg" | head -n1)
+if [ ${#first_line} -gt 72 ]; then
+  echo "⚠️ Warning: Commit message first line is longer than 72 characters"
+  echo "   Current length: ${#first_line}"
+  echo "   Consider shortening: $first_line"
+  echo ""
+  echo "💡 Tip: Keep the first line under 50 characters when possible"
+fi
+
+# Check for proper capitalization
+if echo "$first_line" | grep -q ": [a-z]"; then
+  echo "⚠️ Warning: Description should start with lowercase"
+  echo "   Current: $first_line"
+  echo "   Suggested: $(echo "$first_line" | sed 's/: [A-Z]/: \L&/')"
+fi
+
+# Check for period at end
+if echo "$first_line" | grep -q "\.$"; then
+  echo "⚠️ Warning: Don't end the subject line with a period"
+  echo "   Current: $first_line"
+fi
+
+# Check for imperative mood hints
+if echo "$commit_msg" | grep -qi "\(added\|fixed\|changed\|updated\|removed\)"; then
+  echo "⚠️ Warning: Use imperative mood (add, fix, change, update, remove)"
+  echo "   Instead of 'added', use 'add'"
+  echo "   Instead of 'fixed', use 'fix'"
+  echo "   Instead of 'updated', use 'update'"
+fi
+
+echo "✅ Commit message validation passed!"

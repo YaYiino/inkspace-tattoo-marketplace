@@ -1,0 +1,104 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+.next/
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Environment files
+.env*
+
+# Logs
+*.log
+logs/
+
+# Coverage
+coverage/
+
+# Test outputs
+test-results/
+playwright-report/
+
+# Cache
+.cache/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Generated files
+lib/database.types.ts
+
+# Lock files (maintain original formatting)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Auto-generated documentation
+docs/api/
+
+# Compiled binaries
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Archives
+*.zip
+*.tar.gz
+*.rar
+
+# Database files
+*.sqlite
+*.sqlite3
+*.db
+
+# Docker
+Dockerfile*
+.dockerignore
+
+# Git
+.git/
+.gitignore
+
+# Vercel
+.vercel/
+
+# Supabase
+supabase/.branches/
+supabase/.temp/
+
+# Static assets that shouldn't be formatted
+public/
+static/
+
+# Generated schema files
+schema.graphql
+schema.json
+
+# Changelog (might be auto-generated)
+CHANGELOG.md
+
+# License files
+LICENSE*
+
+# Migration files (SQL formatting can be sensitive)
+migrations/
+*.sql
