@@ -1,225 +1,330 @@
-interface LogEntry {
-  level: 'debug' | 'info' | 'warn' | 'error'
-  message: string
-  metadata?: Record<string, any>
-  timestamp: string
-  requestId?: string
-  userId?: string
-  path?: string
-  userAgent?: string
+/**
+ * Production logging system for Antsss Tattoo Marketplace
+ * Provides structured logging with multiple outputs and error tracking
+ */
+
+interface LogLevel {
+  DEBUG: 0
+  INFO: 1
+  WARN: 2
+  ERROR: 3
+  CRITICAL: 4
 }
 
-class Logger {
-  private static instance: Logger
-  private logLevel: string
+interface LogEntry {
+  timestamp: string
+  level: keyof LogLevel
+  message: string
+  context?: Record<string, any>
+  requestId?: string
+  userId?: string
+  error?: Error
+  duration?: number
+}
 
-  private constructor() {
-    this.logLevel = process.env.LOG_LEVEL || 'info'
+class ProductionLogger {
+  private logLevel: number
+  private isProduction: boolean
+
+  constructor() {
+    this.isProduction = process.env.NODE_ENV === 'production'
+    this.logLevel = this.getLogLevel()
   }
 
-  static getInstance(): Logger {
-    if (!Logger.instance) {
-      Logger.instance = new Logger()
+  private getLogLevel(): number {
+    const level = process.env.LOG_LEVEL?.toLowerCase()
+    switch (level) {
+      case 'debug': return 0
+      case 'info': return 1
+      case 'warn': return 2
+      case 'error': return 3
+      case 'critical': return 4
+      default: return this.isProduction ? 1 : 0 // INFO for prod, DEBUG for dev
     }
-    return Logger.instance
   }
 
-  private shouldLog(level: string): boolean {
-    const levels = ['debug', 'info', 'warn', 'error']
-    const currentLevelIndex = levels.indexOf(this.logLevel)
-    const messageLevelIndex = levels.indexOf(level)
-    return messageLevelIndex >= currentLevelIndex
+  private shouldLog(level: keyof LogLevel): boolean {
+    const levels: LogLevel = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3, CRITICAL: 4 }
+    return levels[level] >= this.logLevel
   }
 
-  private formatMessage(entry: LogEntry): string {
-    if (process.env.NODE_ENV === 'production') {
-      return JSON.stringify(entry)
-    }
-
-    // Pretty format for development
-    const timestamp = new Date(entry.timestamp).toLocaleTimeString()
-    const level = entry.level.toUpperCase().padEnd(5)
-    let message = `[${timestamp}] ${level} ${entry.message}`
-
-    if (entry.metadata) {
-      message += ` ${JSON.stringify(entry.metadata)}`
-    }
-
-    return message
-  }
-
-  private createLogEntry(
-    level: LogEntry['level'],
-    message: string,
-    metadata?: Record<string, any>
-  ): LogEntry {
-    return {
+  private formatLog(entry: LogEntry): string {
+    const { timestamp, level, message, context, requestId, userId, duration } = entry
+    
+    const logObject = {
+      timestamp,
       level,
       message,
-      metadata,
-      timestamp: new Date().toISOString(),
-      requestId: this.getRequestId(),
-      userId: this.getUserId(),
-      path: this.getCurrentPath(),
-      userAgent: this.getUserAgent(),
+      ...(requestId && { requestId }),
+      ...(userId && { userId }),
+      ...(duration && { duration: `${duration}ms` }),
+      ...(context && { context }),
     }
+
+    return this.isProduction ? JSON.stringify(logObject) : this.formatDevLog(entry)
   }
 
-  private getRequestId(): string | undefined {
-    // In a real app, this would come from request context
-    return typeof window === 'undefined' 
-      ? process.env.REQUEST_ID 
-      : undefined
-  }
-
-  private getUserId(): string | undefined {
-    // In a real app, this would come from auth context
-    return typeof window === 'undefined' 
-      ? process.env.USER_ID 
-      : undefined
-  }
-
-  private getCurrentPath(): string | undefined {
-    if (typeof window !== 'undefined') {
-      return window.location.pathname
+  private formatDevLog(entry: LogEntry): string {
+    const colors = {
+      DEBUG: '\x1b[36m', // Cyan
+      INFO: '\x1b[32m',  // Green
+      WARN: '\x1b[33m',  // Yellow
+      ERROR: '\x1b[31m', // Red
+      CRITICAL: '\x1b[35m' // Magenta
     }
-    return process.env.REQUEST_PATH
-  }
+    const reset = '\x1b[0m'
+    const color = colors[entry.level] || colors.INFO
 
-  private getUserAgent(): string | undefined {
-    if (typeof window !== 'undefined') {
-      return window.navigator.userAgent
+    let output = `${color}[${entry.level}]${reset} ${entry.message}`
+    
+    if (entry.requestId) {
+      output += ` (req: ${entry.requestId.slice(0, 8)})`
     }
-    return process.env.USER_AGENT
+    
+    if (entry.duration) {
+      output += ` (${entry.duration}ms)`
+    }
+    
+    if (entry.context) {
+      output += `\n${JSON.stringify(entry.context, null, 2)}`
+    }
+
+    return output
   }
 
-  private async persistLog(entry: LogEntry) {
-    if (process.env.NODE_ENV === 'production') {
-      try {
-        // Send to external logging service (e.g., Sentry, LogRocket, etc.)
-        if (process.env.SENTRY_DSN && entry.level === 'error') {
-          // Send error to Sentry
-          const { captureException } = await import('@sentry/nextjs')
-          captureException(new Error(entry.message), {
-            contexts: {
-              log: entry.metadata
-            },
-            user: entry.userId ? { id: entry.userId } : undefined,
-            tags: {
-              level: entry.level,
-              path: entry.path
-            }
-          })
-        }
+  private writeLog(entry: LogEntry): void {
+    if (!this.shouldLog(entry.level)) return
 
-        // Send to structured logging service
-        if (process.env.LOG_WEBHOOK_URL) {
-          fetch(process.env.LOG_WEBHOOK_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(entry)
-          }).catch(console.error)
-        }
-
-        // Store in database for development
-        if (process.env.NODE_ENV === 'development' && typeof window === 'undefined') {
-          // Store in local database for development debugging
-        }
-
-      } catch (error) {
-        console.error('Failed to persist log:', error)
+    const formattedLog = this.formatLog(entry)
+    
+    // In production, write to stdout/stderr for proper log aggregation
+    if (entry.level === 'ERROR' || entry.level === 'CRITICAL') {
+      console.error(formattedLog)
+      
+      // Send to external error tracking in production
+      if (this.isProduction && entry.error) {
+        this.sendToSentry(entry)
       }
+    } else {
+      console.log(formattedLog)
+    }
+
+    // Send to external logging service in production
+    if (this.isProduction) {
+      this.sendToExternalLogger(entry)
     }
   }
 
-  debug(message: string, metadata?: Record<string, any>) {
-    if (!this.shouldLog('debug')) return
-
-    const entry = this.createLogEntry('debug', message, metadata)
-    console.debug(this.formatMessage(entry))
-    this.persistLog(entry)
+  private async sendToSentry(entry: LogEntry): Promise<void> {
+    try {
+      if (typeof window === 'undefined' && entry.error) {
+        // Server-side Sentry logging
+        const Sentry = await import('@sentry/nextjs')
+        Sentry.captureException(entry.error, {
+          level: entry.level.toLowerCase() as any,
+          tags: {
+            requestId: entry.requestId,
+            userId: entry.userId,
+          },
+          extra: entry.context
+        })
+      }
+    } catch (error) {
+      console.error('Failed to send error to Sentry:', error)
+    }
   }
 
-  info(message: string, metadata?: Record<string, any>) {
-    if (!this.shouldLog('info')) return
-
-    const entry = this.createLogEntry('info', message, metadata)
-    console.info(this.formatMessage(entry))
-    this.persistLog(entry)
-  }
-
-  warn(message: string, metadata?: Record<string, any>) {
-    if (!this.shouldLog('warn')) return
-
-    const entry = this.createLogEntry('warn', message, metadata)
-    console.warn(this.formatMessage(entry))
-    this.persistLog(entry)
-  }
-
-  error(message: string, error?: Error | unknown, metadata?: Record<string, any>) {
-    if (!this.shouldLog('error')) return
-
-    const errorMetadata = {
-      ...metadata,
-      ...(error instanceof Error && {
-        error: {
-          name: error.name,
-          message: error.message,
-          stack: error.stack,
-        }
+  private sendToExternalLogger(entry: LogEntry): void {
+    // In production, you might want to send logs to external services
+    // like DataDog, LogRocket, or custom logging endpoints
+    if (process.env.LOG_WEBHOOK_URL) {
+      fetch(process.env.LOG_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(entry)
+      }).catch(() => {
+        // Silently fail to avoid infinite loops
       })
     }
-
-    const entry = this.createLogEntry('error', message, errorMetadata)
-    console.error(this.formatMessage(entry))
-    this.persistLog(entry)
   }
 
-  // Convenience methods for common scenarios
-  apiRequest(method: string, path: string, statusCode: number, duration: number, metadata?: Record<string, any>) {
-    this.info('API Request', {
-      method,
-      path,
-      statusCode,
-      duration,
-      ...metadata
+  // Public logging methods
+  debug(message: string, context?: Record<string, any>, requestId?: string): void {
+    this.writeLog({
+      timestamp: new Date().toISOString(),
+      level: 'DEBUG',
+      message,
+      context,
+      requestId
     })
   }
 
-  userAction(action: string, userId: string, metadata?: Record<string, any>) {
-    this.info('User Action', {
-      action,
+  info(message: string, context?: Record<string, any>, requestId?: string): void {
+    this.writeLog({
+      timestamp: new Date().toISOString(),
+      level: 'INFO',
+      message,
+      context,
+      requestId
+    })
+  }
+
+  warn(message: string, context?: Record<string, any>, requestId?: string): void {
+    this.writeLog({
+      timestamp: new Date().toISOString(),
+      level: 'WARN',
+      message,
+      context,
+      requestId
+    })
+  }
+
+  error(message: string, error?: Error, context?: Record<string, any>, requestId?: string): void {
+    this.writeLog({
+      timestamp: new Date().toISOString(),
+      level: 'ERROR',
+      message,
+      error,
+      context,
+      requestId
+    })
+  }
+
+  critical(message: string, error?: Error, context?: Record<string, any>, requestId?: string): void {
+    this.writeLog({
+      timestamp: new Date().toISOString(),
+      level: 'CRITICAL',
+      message,
+      error,
+      context,
+      requestId
+    })
+  }
+
+  // Special logging methods for common use cases
+  apiRequest(
+    method: string, 
+    path: string, 
+    statusCode: number, 
+    duration: number, 
+    metadata?: Record<string, any>
+  ): void {
+    const level = statusCode >= 400 ? 'ERROR' : 'INFO'
+    this.writeLog({
+      timestamp: new Date().toISOString(),
+      level,
+      message: `${method} ${path} ${statusCode}`,
+      duration,
+      context: {
+        method,
+        path,
+        statusCode,
+        ...metadata
+      },
+      requestId: metadata?.requestId
+    })
+  }
+
+  userAction(
+    action: string, 
+    userId: string, 
+    success: boolean, 
+    metadata?: Record<string, any>,
+    requestId?: string
+  ): void {
+    this.writeLog({
+      timestamp: new Date().toISOString(),
+      level: success ? 'INFO' : 'WARN',
+      message: `User ${action} ${success ? 'succeeded' : 'failed'}`,
       userId,
-      ...metadata
+      context: {
+        action,
+        success,
+        ...metadata
+      },
+      requestId
     })
   }
 
-  performance(operation: string, duration: number, metadata?: Record<string, any>) {
-    const level = duration > 1000 ? 'warn' : 'info'
-    this[level]('Performance Metric', {
-      operation,
+  businessMetric(
+    metric: string, 
+    value: number | string, 
+    tags?: Record<string, any>
+  ): void {
+    this.writeLog({
+      timestamp: new Date().toISOString(),
+      level: 'INFO',
+      message: `Business metric: ${metric}`,
+      context: {
+        metric,
+        value,
+        tags
+      }
+    })
+  }
+
+  securityEvent(
+    event: string, 
+    severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL',
+    details: Record<string, any>,
+    requestId?: string
+  ): void {
+    const level = severity === 'CRITICAL' ? 'CRITICAL' : 
+                 severity === 'HIGH' ? 'ERROR' : 'WARN'
+    
+    this.writeLog({
+      timestamp: new Date().toISOString(),
+      level,
+      message: `Security event: ${event}`,
+      context: {
+        event,
+        severity,
+        ...details
+      },
+      requestId
+    })
+  }
+
+  performance(
+    operation: string,
+    duration: number,
+    metadata?: Record<string, any>,
+    requestId?: string
+  ): void {
+    const level = duration > 5000 ? 'WARN' : 'DEBUG'
+    
+    this.writeLog({
+      timestamp: new Date().toISOString(),
+      level,
+      message: `Performance: ${operation}`,
       duration,
-      ...metadata
-    })
-  }
-
-  security(event: string, metadata?: Record<string, any>) {
-    this.warn('Security Event', {
-      event,
-      ...metadata
-    })
-  }
-
-  business(event: string, metadata?: Record<string, any>) {
-    this.info('Business Event', {
-      event,
-      ...metadata
+      context: {
+        operation,
+        ...metadata
+      },
+      requestId
     })
   }
 }
 
 // Export singleton instance
-export const logger = Logger.getInstance()
+export const logger = new ProductionLogger()
 
-// Export types for TypeScript
-export type { LogEntry }
+// Export structured logging helpers
+export const createContextualLogger = (defaultContext: Record<string, any>) => {
+  return {
+    debug: (message: string, additionalContext?: Record<string, any>, requestId?: string) =>
+      logger.debug(message, { ...defaultContext, ...additionalContext }, requestId),
+    
+    info: (message: string, additionalContext?: Record<string, any>, requestId?: string) =>
+      logger.info(message, { ...defaultContext, ...additionalContext }, requestId),
+    
+    warn: (message: string, additionalContext?: Record<string, any>, requestId?: string) =>
+      logger.warn(message, { ...defaultContext, ...additionalContext }, requestId),
+    
+    error: (message: string, error?: Error, additionalContext?: Record<string, any>, requestId?: string) =>
+      logger.error(message, error, { ...defaultContext, ...additionalContext }, requestId),
+  }
+}
+
+export type Logger = typeof logger

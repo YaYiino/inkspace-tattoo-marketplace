@@ -30,12 +30,48 @@ const nextConfig = {
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },
 
-  // Security headers
+  // Security headers with Content Security Policy
   async headers() {
+    const ContentSecurityPolicy = `
+      default-src 'self';
+      script-src 'self' 'unsafe-eval' 'unsafe-inline' 
+        https://*.googletagmanager.com 
+        https://*.google-analytics.com 
+        https://*.mixpanel.com 
+        https://js.sentry-cdn.com 
+        https://browser.sentry-cdn.com;
+      child-src 'none';
+      style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+      img-src 'self' blob: data: 
+        https://*.supabase.co 
+        https://images.unsplash.com 
+        https://cdn.antsss.com 
+        https://*.googletagmanager.com;
+      media-src 'self' https://*.supabase.co;
+      connect-src 'self' 
+        https://*.supabase.co 
+        https://*.google-analytics.com 
+        https://*.mixpanel.com 
+        https://sentry.io 
+        https://*.sentry.io 
+        https://vitals.vercel-insights.com 
+        wss://*.supabase.co;
+      font-src 'self' https://fonts.gstatic.com;
+      object-src 'none';
+      base-uri 'self';
+      form-action 'self';
+      frame-ancestors 'none';
+      upgrade-insecure-requests;
+    `.replace(/\s{2,}/g, ' ').trim()
+
     return [
       {
         source: '/(.*)',
         headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: ContentSecurityPolicy,
+          },
           {
             key: 'X-Frame-Options',
             value: 'DENY',
@@ -54,18 +90,22 @@ const nextConfig = {
           },
           {
             key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=()',
+            value: 'camera=(), microphone=(), geolocation=(), payment=()',
           },
           {
             key: 'Strict-Transport-Security',
             value: 'max-age=31536000; includeSubDomains; preload',
+          },
+          {
+            key: 'X-DNS-Prefetch-Control',
+            value: 'on',
           },
         ],
       },
     ]
   },
 
-  // Content Security Policy
+  // URL rewrites
   async rewrites() {
     return {
       beforeFiles: [
