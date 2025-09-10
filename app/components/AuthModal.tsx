@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
-import { useSupabaseClient, useUser } from '@supabase/auth-helpers-react'
+import { useState, useEffect } from 'react'
 import { Auth } from '@supabase/auth-ui-react'
 import { ThemeSupa } from '@supabase/auth-ui-shared'
+import { createClient } from '@/lib/supabase'
+import { useAuth } from '@/lib/providers/auth-provider'
 import Button from './Button'
-import { Database, UserRole } from '../../lib/types'
+import { UserRole } from '@/lib/types'
 
 interface AuthModalProps {
   isOpen: boolean
@@ -14,8 +15,8 @@ interface AuthModalProps {
 }
 
 const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialRole }) => {
-  const supabase = useSupabaseClient<Database>()
-  const user = useUser()
+  const supabase = createClient()
+  const { user, refreshProfile } = useAuth()
   const [selectedRole, setSelectedRole] = useState<UserRole>(initialRole || 'artist')
   const [showAuth, setShowAuth] = useState(false)
   const [isCreatingProfile, setIsCreatingProfile] = useState(false)
@@ -34,13 +35,15 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialRole }) =
         .from('profiles')
         .upsert({
           id: user.id,
-          email: user.email,
+          email: user.email || '',
+          full_name: user.user_metadata?.full_name || user.user_metadata?.name || '',
           role: selectedRole,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
         })
 
       if (error) throw error
+      
+      // Refresh the profile in the auth context
+      await refreshProfile()
       onClose()
     } catch (error) {
       console.error('Error creating profile:', error)
@@ -57,7 +60,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialRole }) =
         <div className="p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold text-gray-900">
-              {user ? 'Complete Your Profile' : 'Join InkSpace'}
+              {user ? 'Complete Your Profile' : 'Join Antsss'}
             </h2>
             <button
               onClick={onClose}
@@ -119,7 +122,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialRole }) =
             <div className="space-y-6">
               <div>
                 <p className="text-gray-600 mb-4">
-                  Choose how you want to use InkSpace:
+                  Choose how you want to use Antsss:
                 </p>
                 <div className="grid grid-cols-1 gap-4">
                   <button

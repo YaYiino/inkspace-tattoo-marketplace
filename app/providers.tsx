@@ -1,12 +1,10 @@
 'use client'
 
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import { SessionContextProvider, useUser } from '@supabase/auth-helpers-react'
-import { useState, useEffect } from 'react'
+import { AuthProvider, useAuth } from '@/lib/providers/auth-provider'
 import { MonitoringProvider } from '@/lib/monitoring/MonitoringProvider'
 
 function MonitoringWrapper({ children }: { children: React.ReactNode }) {
-  const user = useUser()
+  const { user } = useAuth()
 
   return (
     <MonitoringProvider
@@ -25,13 +23,11 @@ function MonitoringWrapper({ children }: { children: React.ReactNode }) {
 }
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const [supabase] = useState(() => createClientComponentClient())
-
   return (
-    <SessionContextProvider supabaseClient={supabase}>
+    <AuthProvider>
       <MonitoringWrapper>
         {children}
       </MonitoringWrapper>
-    </SessionContextProvider>
+    </AuthProvider>
   )
 }
