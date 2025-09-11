@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
       )
       
       const { data, error } = await supabase
-        .from('user_profiles')
+        .from('profiles')
         .select('count(*)')
         .limit(1)
 
@@ -171,7 +171,7 @@ export async function HEAD(_request: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
     
-    await supabase.from('user_profiles').select('count(*)').limit(1)
+    await supabase.from('profiles').select('count(*)').limit(1)
     
     return new NextResponse(null, { status: 200 })
   } catch (error) {
