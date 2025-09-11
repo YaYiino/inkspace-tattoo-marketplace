@@ -32,13 +32,6 @@ export function initSentry() {
         return event
       },
       
-      // Configure integrations
-      integrations: [
-        new Sentry.BrowserTracing({
-          routingInstrumentation: Sentry.nextRouterInstrumentation,
-        }),
-      ],
-      
       // Configure tags
       initialScope: {
         tags: {

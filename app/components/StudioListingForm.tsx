@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react'
 import { Studio, StudioFormData, STUDIO_AMENITIES, STUDIO_EQUIPMENT, CANCELLATION_POLICIES } from '@/lib/types'
 import Button from './Button'
-import ImageUpload from '../profile-completion/components/ImageUpload'
+import { ImageUpload } from '../profile-completion/components/ImageUpload'
 
 interface StudioListingFormProps {
   studio?: Studio
