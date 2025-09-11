@@ -2,36 +2,11 @@
 
 import Link from 'next/link'
 import { useEffect } from 'react'
-import { analytics } from '@/lib/monitoring/analytics'
-import { enhancedLogger } from '@/lib/monitoring/enhanced-logger'
 
 export default function NotFound() {
   useEffect(() => {
-    // Log 404 page view
-    enhancedLogger.logError(
-      new Error(`Page not found: ${window.location.pathname}`),
-      'ui',
-      {
-        context: {
-          type: '404_error',
-          path: window.location.pathname,
-          referrer: document.referrer,
-        },
-        tags: {
-          error_type: '404',
-        },
-      }
-    )
-
-    // Track 404 in analytics
-    analytics.track({
-      name: '404_page_viewed',
-      properties: {
-        path: window.location.pathname,
-        referrer: document.referrer,
-        user_agent: navigator.userAgent,
-      },
-    })
+    // TODO: Re-enable monitoring once build issues are resolved
+    console.log('404 page viewed:', window.location.pathname)
   }, [])
 
   return (

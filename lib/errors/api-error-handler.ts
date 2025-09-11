@@ -320,7 +320,6 @@ export function setupGlobalErrorHandling() {
 // Export all error classes for convenience
 export {
   ApiError as default,
-  ValidationError,
   AuthenticationError,
   AuthorizationError,
   NotFoundError,

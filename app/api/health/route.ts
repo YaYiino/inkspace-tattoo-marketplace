@@ -1,9 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
+interface HealthCheck {
+  status: string
+  timestamp: string
+  version: string
+  environment: string
+  uptime: number
+  checks: {
+    database: { status: string; responseTime: number; error?: string; recordCount?: number }
+    redis: { status: string; responseTime: number; error?: string }
+    external_apis: { status: string; responseTime: number; error?: string }
+    memory: { status: string; usage: number; limit: number; error?: string }
+    disk: { status: string; usage: number; limit: number; error?: string }
+  }
+  metadata: {
+    hostname: string
+    platform: string
+    nodeVersion: string
+    responseTime?: number
+  }
+}
+
 export async function GET(request: NextRequest) {
   const start = Date.now()
-  const healthCheck = {
+  const healthCheck: HealthCheck = {
     status: 'healthy',
     timestamp: new Date().toISOString(),
     version: process.env.npm_package_version || '1.0.0',
@@ -142,7 +163,7 @@ export async function GET(request: NextRequest) {
 }
 
 // Support HEAD requests for simple health checks
-export async function HEAD(request: NextRequest) {
+export async function HEAD(_request: NextRequest) {
   try {
     // Simple database connectivity check
     const supabase = createClient(

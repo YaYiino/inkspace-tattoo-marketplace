@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, ReactNode } from 'react'
 import { monitoring, type MonitoringConfig } from './index'
 import { GlobalErrorBoundary } from '../errors/GlobalErrorBoundary'
 import { ToastProvider } from '../notifications/toast'
-// import { ErrorDebugger } from '../errors/dev-tools' // Temporarily disabled
+import { ErrorDebugger } from '../errors/dev-tools'
 import { 
   useGlobalErrorHandler, 
   usePerformanceMonitoring, 
@@ -78,9 +78,9 @@ export function MonitoringProvider({
       <GlobalErrorBoundary>
         <ToastProvider>
           {children}
-          {/* {process.env.NODE_ENV === 'development' && (
+          {process.env.NODE_ENV === 'development' && (
             <ErrorDebugger enabled={true} position="bottom-right" />
-          )} */}
+          )}
         </ToastProvider>
       </GlobalErrorBoundary>
     </MonitoringContext.Provider>

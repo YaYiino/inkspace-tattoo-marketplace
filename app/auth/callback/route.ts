@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
   const next = requestUrl.searchParams.get('next') ?? '/'
 
   if (code) {
-    const cookieStore = cookies()
+    cookies() // Initialize cookies for the server client
     const supabase = createServerClient()
     
     const { error } = await supabase.auth.exchangeCodeForSession(code)
@@ -37,18 +37,19 @@ export async function GET(request: NextRequest) {
         return NextResponse.redirect(`${requestUrl.origin}/complete-profile`)
       }
       
-      // Profile exists, check if it has role assigned
-      if (!profile.role) {
+      // Profile exists, check if it has role assigned  
+      const profileData = profile as any // Type assertion for now until we have proper Supabase types
+      if (!profileData.role) {
         console.log('Profile exists but no role, redirecting to complete-profile')
         return NextResponse.redirect(`${requestUrl.origin}/complete-profile`)
       }
       
-      console.log('Profile complete, redirecting based on role:', profile.role)
+      console.log('Profile complete, redirecting based on role:', profileData.role)
       
       // Redirect to appropriate dashboard
-      if (profile.role === 'artist') {
+      if (profileData.role === 'artist') {
         return NextResponse.redirect(`${requestUrl.origin}/dashboard/artist`)
-      } else if (profile.role === 'studio') {
+      } else if (profileData.role === 'studio') {
         return NextResponse.redirect(`${requestUrl.origin}/dashboard/studio`)
       }
     }
