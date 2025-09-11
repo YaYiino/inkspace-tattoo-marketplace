@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { logger } from './lib/monitoring/logger'
 
 export function middleware(request: NextRequest) {
-  const start = Date.now()
   const requestId = crypto.randomUUID()
   
   // Add request ID to headers
@@ -36,7 +34,7 @@ export function middleware(request: NextRequest) {
     return new Response(null, { status: 200, headers: response.headers })
   }
 
-  // Rate limiting check (simple implementation)
+  // Rate limiting check (simplified for Edge Runtime)
   const rateLimitResult = checkRateLimit(request)
   if (!rateLimitResult.allowed) {
     return new NextResponse('Too Many Requests', { 
@@ -52,26 +50,14 @@ export function middleware(request: NextRequest) {
   if (isProtectedRoute(request.nextUrl.pathname)) {
     const authResult = checkAuthentication(request)
     if (!authResult.authenticated) {
-      return NextResponse.redirect(new URL('/auth/login', request.url))
+      return NextResponse.redirect(new URL('/', request.url))
     }
   }
 
-  // Log request (non-blocking)
-  Promise.resolve().then(() => {
-    const duration = Date.now() - start
-    logger.apiRequest(
-      request.method,
-      request.nextUrl.pathname,
-      response.status,
-      duration,
-      {
-        requestId,
-        userAgent: request.headers.get('user-agent'),
-        ip: getClientIP(request),
-        referer: request.headers.get('referer'),
-      }
-    )
-  })
+  // Simple console logging for development (Edge Runtime compatible)
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`${request.method} ${request.nextUrl.pathname} - ${requestId}`)
+  }
 
   return response
 }
