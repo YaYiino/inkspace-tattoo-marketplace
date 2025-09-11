@@ -23,15 +23,33 @@ export async function GET(request: NextRequest) {
     
     if (user) {
       // Check if profile exists
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .single()
       
-      if (!profile) {
+      console.log('Auth callback - Profile check:', { profile, profileError })
+      
+      if (!profile || profileError) {
         // Profile doesn't exist, redirect to complete profile
+        console.log('Redirecting to complete-profile')
         return NextResponse.redirect(`${requestUrl.origin}/complete-profile`)
+      }
+      
+      // Profile exists, check if it has role assigned
+      if (!profile.role) {
+        console.log('Profile exists but no role, redirecting to complete-profile')
+        return NextResponse.redirect(`${requestUrl.origin}/complete-profile`)
+      }
+      
+      console.log('Profile complete, redirecting based on role:', profile.role)
+      
+      // Redirect to appropriate dashboard
+      if (profile.role === 'artist') {
+        return NextResponse.redirect(`${requestUrl.origin}/dashboard/artist`)
+      } else if (profile.role === 'studio') {
+        return NextResponse.redirect(`${requestUrl.origin}/dashboard/studio`)
       }
     }
   }

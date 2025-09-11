@@ -1,55 +1,25 @@
 'use client'
 
-import { useSupabaseClient, useUser } from '@supabase/auth-helpers-react'
 import { useState, useEffect } from "react"
+import { useAuth } from '@/lib/providers/auth-provider'
+import { createClient } from '@/lib/supabase'
 import Button from "./components/Button"
 import Section from "./components/Section"
 import Card from "./components/Card"
 import AuthModal from "./components/AuthModal"
 import QuickSearch from "./components/QuickSearch"
-import { Database, Profile, UserRole } from "../lib/types"
+import { Profile, UserRole } from "../lib/types"
 
 export default function Home() {
-  const supabase = useSupabaseClient<Database>()
-  const user = useUser()
+  const { user, profile, isLoading } = useAuth()
+  const supabase = createClient()
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [selectedRole, setSelectedRole] = useState<UserRole>('artist')
-  const [userProfile, setUserProfile] = useState<Profile | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    if (user) {
-      getUserProfile()
-    } else {
-      setIsLoading(false)
-    }
-  }, [user])
-
-  const getUserProfile = async () => {
-    if (!user) return
-
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
-
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching profile:', error)
-      } else if (data) {
-        setUserProfile(data)
-      }
-    } catch (error) {
-      console.error('Error fetching profile:', error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  // Profile is now managed by AuthProvider, no need for local state or effects
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
-    setUserProfile(null)
   }
 
   const openAuthModal = (role: UserRole) => {
@@ -92,7 +62,7 @@ export default function Home() {
               {user ? (
                 <div className="flex items-center space-x-4">
                   <span className="text-sm text-gray-700">
-                    Welcome, {userProfile?.role === 'artist' ? 'Artist' : 'Studio Owner'}
+                    Welcome, {profile?.role === 'artist' ? 'Artist' : 'Studio Owner'}
                   </span>
                   <Button
                     onClick={handleSignOut}
@@ -460,7 +430,7 @@ export default function Home() {
                 </p>
               </div>
             </div>
-          ) : userProfile ? (
+          ) : profile ? (
             <Card className="max-w-2xl mx-auto text-center">
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -469,15 +439,15 @@ export default function Home() {
               </div>
               <h3 className="text-2xl font-bold text-gray-900 mb-2">Welcome to Antsss!</h3>
               <p className="text-gray-600 mb-6">
-                You're signed in as a {userProfile.role === 'artist' ? 'Tattoo Artist' : 'Studio Owner'}. 
+                You're signed in as a {profile.role === 'artist' ? 'Tattoo Artist' : 'Studio Owner'}. 
                 The platform is currently in development.
               </p>
               <div className="space-y-2 text-sm text-gray-500">
                 <div>
-                  <strong>Email:</strong> {user.email}
+                  <strong>Email:</strong> {user?.email}
                 </div>
                 <div>
-                  <strong>Role:</strong> {userProfile.role === 'artist' ? 'Tattoo Artist' : 'Studio Owner'}
+                  <strong>Role:</strong> {profile.role === 'artist' ? 'Tattoo Artist' : 'Studio Owner'}
                 </div>
               </div>
             </Card>
@@ -556,12 +526,7 @@ export default function Home() {
       {/* Auth Modal */}
       <AuthModal
         isOpen={isAuthModalOpen}
-        onClose={() => {
-          setIsAuthModalOpen(false)
-          if (user && !userProfile) {
-            getUserProfile()
-          }
-        }}
+        onClose={() => setIsAuthModalOpen(false)}
         initialRole={selectedRole}
       />
     </div>
