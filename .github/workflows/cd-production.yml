@@ -1,10 +1,11 @@
 name: Deploy to Production
 
 on:
-  push:
-    branches: [main]
-  release:
-    types: [published]
+  # Temporarily disabled to fix deployment issues
+  # push:
+  #   branches: [main]
+  # release:
+  #   types: [published]
   workflow_dispatch:
     inputs:
       version:

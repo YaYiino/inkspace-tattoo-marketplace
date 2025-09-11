@@ -1,8 +1,9 @@
 name: Production Deployment with Rollback
 
 on:
-  push:
-    branches: [main]
+  # Temporarily disabled to fix deployment issues
+  # push:
+  #   branches: [main]
   workflow_dispatch:
     inputs:
       rollback_to:
