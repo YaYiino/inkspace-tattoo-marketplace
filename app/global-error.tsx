@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect } from 'react'
-import { enhancedLogger } from '@/lib/monitoring/enhanced-logger'
 
 interface GlobalErrorProps {
   error: Error & { digest?: string }
@@ -10,8 +9,9 @@ interface GlobalErrorProps {
 
 export default function GlobalError({ error, reset }: GlobalErrorProps) {
   useEffect(() => {
-    // Log critical global error
-    enhancedLogger.logError(error, 'ui', {
+    // Log critical global error (simplified for deployment)
+    console.error('Global Error:', error, {
+      digest: error.digest,
       context: {
         type: 'global_error',
         digest: error.digest,
